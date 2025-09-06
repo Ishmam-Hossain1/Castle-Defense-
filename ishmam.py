@@ -3,7 +3,7 @@ from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from math import sin, cos, atan2, radians, sqrt
 
-GRID_LENGTH = 1600
+GRID_LENGTH = 500
 cam_angle_h = 45
 cam_angle_v = 30
 cam_dist = 8000  # Increased for better view of perimeter wall
