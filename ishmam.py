@@ -663,7 +663,7 @@ def draw_wooden_circle_on_roof(castle, radius=120, thickness=20):
 
 
 def draw_single_castle(config):
-    """Draw individual castle"""
+    """Draw individual castle with hollow interior"""
     pos = config['position']
     size = config['size']
     height = config['height']
@@ -752,18 +752,40 @@ def draw_single_castle(config):
         draw_cube_manual_shading(0, 0, 0, length - 2*wall_inset, 10, 8, railing_bar_color)
         glPopMatrix()
     
-    # Interior and gate (unchanged)
+    # Hollow interior walls
     interior_base = [0.82, 0.8, 0.72]
-    gate_base = [0.3, 0.3, 0.3]
     interior_color = get_color_scheme(color_scheme, interior_base)
+    wall_thickness_inner = 20
+    inner_length = size * 0.8
+    inner_height = wall_height
+    half = inner_length / 2
+    
+    # North wall
+    draw_cube_manual_shading(pos[0], pos[1] + half - wall_thickness_inner/2,
+                            pos[2] + inner_height/2,
+                            inner_length, wall_thickness_inner, inner_height, interior_color)
+    # South wall
+    draw_cube_manual_shading(pos[0], pos[1] - half + wall_thickness_inner/2,
+                            pos[2] + inner_height/2,
+                            inner_length, wall_thickness_inner, inner_height, interior_color)
+    # East wall
+    draw_cube_manual_shading(pos[0] + half - wall_thickness_inner/2, pos[1],
+                            pos[2] + inner_height/2,
+                            wall_thickness_inner, inner_length, inner_height, interior_color)
+    # West wall
+    draw_cube_manual_shading(pos[0] - half + wall_thickness_inner/2, pos[1],
+                            pos[2] + inner_height/2,
+                            wall_thickness_inner, inner_length, inner_height, interior_color)
+    
+    # Draw gate
+    gate_base = [0.3, 0.3, 0.3]
     gate_color = get_color_scheme(color_scheme, gate_base)
+    draw_cube_manual_shading(pos[0], pos[1] - half + wall_inset, pos[2] + wall_height/2,
+                            300, 80, wall_height, gate_color)
     
-    draw_cube_manual_shading(pos[0], pos[1], pos[2] + wall_height/2,
-                           size * 0.8, size * 0.8, wall_height, interior_color)
-    draw_cube_manual_shading(pos[0], pos[1] - half_size + wall_inset, pos[2] + wall_height/2,
-                           300, 80, wall_height, gate_color)
-    
+    # Draw wooden circle on roof
     draw_wooden_circle_on_roof(config, radius=120, thickness=20)
+
 
 
 
@@ -811,21 +833,26 @@ def draw_text(x, y, text, font=GLUT_BITMAP_HELVETICA_18):
 def clamp_player_position():
     """Clamp player inside allowed zones so he cannot cross boundaries."""
     global player_pos
-
     x, y, z = player_pos
 
-    # Castle roofs
+    # Find castles where player is within Z range
+    valid_castles = []
     for castle in castle_configs:
-        half = castle['size'] / 2
-        x_min, x_max = castle['position'][0] - half, castle['position'][0] + half
-        y_min, y_max = castle['position'][1] - half, castle['position'][1] + half
-        z_min, z_max = castle['position'][2], castle['position'][2] + castle['height']
-        
-        # Only clamp if player is within roof Z range
+        z_min = castle['position'][2]
+        z_max = castle['position'][2] + castle['height']
         if z_min <= z <= z_max:
-            player_pos[0] = max(x_min, min(x, x_max))
-            player_pos[1] = max(y_min, min(y, y_max))
-            return
+            valid_castles.append(castle)
+
+    if valid_castles:
+        # Choose the castle closest to player in XY plane
+        closest_castle = min(valid_castles,
+                             key=lambda c: (x - c['position'][0])**2 + (y - c['position'][1])**2)
+        half = closest_castle['size'] / 2
+        x_min, x_max = closest_castle['position'][0] - half, closest_castle['position'][0] + half
+        y_min, y_max = closest_castle['position'][1] - half, closest_castle['position'][1] + half
+        player_pos[0] = max(x_min, min(x, x_max))
+        player_pos[1] = max(y_min, min(y, y_max))
+        return
 
     # Central rock platform
     rock_x, rock_y, rock_z = central_rock_pos
@@ -948,24 +975,36 @@ def handle_keyboard(key, x, y):
 
     # Move player forward/backward
     elif k == 'w':
-        rad = radians(player_angle + 90)
-        player_pos[0] += player_speed * cos(rad)
-        player_pos[1] += player_speed * sin(rad)
-        clamp_player_position()
+        if player_pos != [central_rock_pos[0], central_rock_pos[1], central_rock_pos[2] + 1630]:
+            rad = radians(player_angle + 90)
+            player_pos[0] += player_speed * cos(rad)
+            player_pos[1] += player_speed * sin(rad)
+            clamp_player_position()
     elif k == 's':
-        rad = radians(player_angle + 90)
-        player_pos[0] -= player_speed * cos(rad)
-        player_pos[1] -= player_speed * sin(rad)
-        clamp_player_position()
+        if player_pos != [central_rock_pos[0], central_rock_pos[1], central_rock_pos[2] + 1630]:
+            rad = radians(player_angle + 90)
+            player_pos[0] -= player_speed * cos(rad)
+            player_pos[1] -= player_speed * sin(rad)
+            clamp_player_position()
 
     # Teleport to castle roofs
     elif k in ['1', '2', '3']:
-        index = int(k) - 1
-        castle = castle_configs[index]
-        player_pos[0] = castle['position'][0]
-        player_pos[1] = castle['position'][1]
-        player_pos[2] = castle['position'][2] + castle['roof_z'] + 75
-        clamp_player_position()
+        if player_pos == [central_rock_pos[0], central_rock_pos[1], central_rock_pos[2] + 1630]:
+            index = int(k) - 1
+            castle = castle_configs[index]
+            # Teleport player above castle roof
+            player_pos[0] = castle['position'][0]
+            player_pos[1] = castle['position'][1]
+            player_pos[2] = castle['position'][2] + castle['roof_z'] + 75
+
+            # Clamp only within the castle just teleported
+            half = castle['size'] / 2
+            player_pos[0] = max(castle['position'][0]-half, min(player_pos[0], castle['position'][0]+half))
+            player_pos[1] = max(castle['position'][1]-half, min(player_pos[1], castle['position'][1]+half))
+
+            glutPostRedisplay()
+            return
+
 
     elif key == b'4':  # teleport back to spawn
         # distance threshold to consider "at the center" (with margin)
