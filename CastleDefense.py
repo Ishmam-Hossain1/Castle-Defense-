@@ -664,6 +664,223 @@ def draw_single_castle(config):
     draw_cube_manual_shading(pos[0], pos[1] - half_size + wall_inset, pos[2] + wall_height/2,
                            300, 80, wall_height, gate_color)
 
+def draw_simple_tree(x, y, z, size=100):
+    """Draw a simple tree using larger spheres - computationally efficient"""
+    quad = gluNewQuadric()
+    
+    # Simple trunk (cylinder)
+    glPushMatrix()
+    glTranslatef(x, y, z)
+    glColor3f(0.4, 0.2, 0.1)  # Brown trunk
+    gluCylinder(quad, size*0.15, size*0.1, size*0.8, 6, 10)  # Low polygon count
+    
+    # Large foliage sphere
+    glTranslatef(0, 0, size*0.6)
+    glColor3f(0.1, 0.5, 0.1)  # Dark green
+    gluSphere(quad, size*0.6, 8, 8)  # Large sphere, low detail
+    glPopMatrix()
+
+def draw_simple_bush(x, y, z, size=60):
+    """Draw a simple bush using one large sphere"""
+    quad = gluNewQuadric()
+    
+    glPushMatrix()
+    glTranslatef(x, y, z + size*0.4)
+    glColor3f(0.2, 0.4, 0.2)  # Medium green
+    gluSphere(quad, size*0.5, 6, 6)  # Large sphere, low detail
+    glPopMatrix()
+
+def draw_multi_colored_grid():
+    """Draw a grid with multiple shades of green - efficient and colorful"""
+    grid_size = GRID_LENGTH * 20
+    quad_size = 800  # Size of each colored square
+    num_quads = (grid_size * 2) // quad_size
+    
+    # Define multiple green shades
+    green_colors = [
+        [0.15, 0.4, 0.15],   # Dark green
+        [0.2, 0.5, 0.2],     # Medium dark green
+        [0.25, 0.6, 0.25],   # Regular green
+        [0.3, 0.7, 0.3],     # Medium light green
+        [0.35, 0.75, 0.35],  # Light green
+        [0.4, 0.8, 0.4],     # Very light green
+        [0.2, 0.45, 0.2],    # Forest green
+        [0.18, 0.55, 0.18]   # Grass green
+    ]
+    
+    # Draw colored grid squares
+    for i in range(num_quads):
+        for j in range(num_quads):
+            # Calculate square position
+            x1 = -grid_size + i * quad_size
+            y1 = -grid_size + j * quad_size
+            x2 = x1 + quad_size
+            y2 = y1 + quad_size
+            
+            # Choose color based on position (creates a pattern)
+            color_index = (i + j) % len(green_colors)
+            color = green_colors[color_index]
+            
+            # Draw colored square
+            glColor3f(color[0], color[1], color[2])
+            glBegin(GL_QUADS)
+            glVertex3f(x1, y1, 0)
+            glVertex3f(x2, y1, 0)
+            glVertex3f(x2, y2, 0)
+            glVertex3f(x1, y2, 0)
+            glEnd()
+    
+    # Draw grid lines for definition
+    glColor3f(0.1, 0.3, 0.1)  # Very dark green for grid lines
+    glLineWidth(1.0)
+    glBegin(GL_LINES)
+    
+    # Vertical lines
+    for i in range(num_quads + 1):
+        line_x = -grid_size + i * quad_size
+        glVertex3f(line_x, -grid_size, 1)  # Slightly above ground
+        glVertex3f(line_x, grid_size, 1)
+    
+    # Horizontal lines  
+    for j in range(num_quads + 1):
+        line_y = -grid_size + j * quad_size
+        glVertex3f(-grid_size, line_y, 1)
+        glVertex3f(grid_size, line_y, 1)
+    
+    glEnd()
+
+def draw_minimal_vegetation():
+    """Add minimal vegetation - only 15 trees and 25 bushes for efficiency"""
+    # Fixed positions to avoid random generation overhead
+    tree_positions = [
+        (-5000, -3000), (-4000, 2000), (-2000, -4000), (3000, -2000), (4000, 3000),
+        (-6000, 1000), (2000, -5000), (5000, -1000), (-1000, -6000), (6000, 2000),
+        (-3000, 4000), (1000, 5000), (-5000, 0), (0, -3000), (4000, 0)
+    ]
+    
+    bush_positions = [
+        (-4500, -2500), (-3500, 1500), (-1500, -3500), (2500, -1500), (3500, 2500),
+        (-5500, 500), (1500, -4500), (4500, -500), (-500, -5500), (5500, 1500),
+        (-2500, 3500), (500, 4500), (-4500, -500), (-500, -2500), (3500, -500),
+        (-1500, 4500), (4500, 500), (-3500, -1500), (2500, 3500), (-500, 5500),
+        (-6000, -1000), (1000, -6000), (6000, 1000), (-1000, 6000), (0, -4000)
+    ]
+    
+    # Check if position is safe (avoid buildings)
+    def is_safe_position(x, y):
+        # Simple distance check from castle centers
+        castle_centers = [[-800, -1600], [900, 1000], [-3300, 400], [-1000, 1500]]
+        for cx, cy in castle_centers:
+            if sqrt((x - cx)**2 + (y - cy)**2) < 900:
+                return False
+        return True
+    
+    # Draw trees (larger, fewer)
+    for x, y in tree_positions:
+        if is_safe_position(x, y):
+            draw_simple_tree(x, y, 30, 240)  # Larger trees
+    
+    # Draw bushes (larger, fewer)
+    for x, y in bush_positions:
+        if is_safe_position(x, y):
+            draw_simple_bush(x, y, 0, 190)  # Larger bushes
+
+
+def draw_mountain_range():
+    """Draw dense clusters of rocky mountains around the scene - with more spacing"""
+    # Mountains spaced further apart for better visual separation
+    mountain_positions = [
+        # NORTH CLUSTER (more spread out)
+        (-2746, 6714, 0, 825, 1079, 740),
+        (-1150, 8828, 0, 942, 1077, 652),
+        (-2708, 7358, 0, 1358, 744, 816),
+        (-1368, 8630, 0, 895, 811, 719),
+        (-2883, 7216, 0, 827, 987, 701),
+        (-1100, 9100, 0, 1200, 900, 800),
+        (-2600, 6900, 0, 1000, 850, 750),
+        
+        # SOUTH CLUSTER (more spread out)
+        (-167, -6735, 0, 1358, 914, 712),
+        (-2441, -8797, 0, 1084, 703, 681),
+        (-186, -6968, 0, 1148, 842, 679),
+        (-2680, -8619, 0, 1144, 752, 647),
+        (-511, -7301, 0, 1167, 876, 735),
+        (-2300, -8800, 0, 1100, 800, 700),
+        (-800, -7000, 0, 900, 750, 650),
+        
+        # EAST CLUSTER (more spread out)
+        (6644, -1653, 0, 1270, 974, 663),
+        (8987, -320, 0, 1365, 850, 785),
+        (7191, -2204, 0, 871, 723, 716),
+        (9391, -104, 0, 881, 819, 651),
+        (6989, -2116, 0, 1264, 1025, 786),
+        (9100, 200, 0, 1000, 900, 750),
+        (6800, -2000, 0, 1200, 850, 700),
+        
+        # WEST CLUSTER (more spread out)
+        (-7234, 479, 0, 1163, 807, 736),
+        (-8682, -1201, 0, 873, 1011, 687),
+        (-6854, 846, 0, 1050, 783, 836),
+        (-9012, -1624, 0, 1370, 812, 766),
+        (-6614, 894, 0, 857, 817, 616),
+        (-8900, -1400, 0, 1100, 950, 800),
+        (-7200, 700, 0, 950, 800, 650),
+        
+        # NORTHEAST CLUSTER (more spread out)
+        (5000, 4500, 0, 1000, 800, 700),
+        (7300, 6800, 0, 850, 750, 650),
+        (4800, 4600, 0, 1200, 900, 800),
+        (7100, 6300, 0, 950, 850, 750),
+        
+        # NORTHWEST CLUSTER (more spread out)
+        (-7000, 4500, 0, 1100, 900, 750),
+        (-5400, 6800, 0, 900, 800, 700),
+        (-6700, 4600, 0, 1250, 950, 850),
+        (-5200, 6200, 0, 1000, 850, 750),
+        
+        # SOUTHEAST CLUSTER (more spread out)
+        (5000, -6500, 0, 1050, 850, 700),
+        (7300, -4200, 0, 950, 800, 650),
+        (4800, -6800, 0, 1150, 900, 750),
+        (7100, -4600, 0, 900, 750, 700),
+        
+        # SOUTHWEST CLUSTER (more spread out)
+        (-7000, -6500, 0, 1200, 950, 800),
+        (-5300, -4800, 0, 800, 700, 600),
+        (-6700, -6300, 0, 1100, 900, 750),
+        (-5100, -4600, 0, 950, 800, 700),
+    ]
+    
+    for x, y, z, width, height, depth in mountain_positions:
+        draw_rocky_mountain(x, y, z, width, height, depth)
+
+
+
+
+
+
+
+
+def draw_rocky_mountain(x, y, z, width=800, height=600, depth=600):
+    """Draw a rocky mountain using quadric objects"""
+    quad = gluNewQuadric()
+    
+    # Mountain base color (rocky gray-brown)
+    base_color = [0.5, 0.4, 0.35]
+    
+    glPushMatrix()
+    glTranslatef(x, y, z)
+    glColor3f(base_color[0], base_color[1], base_color[2])
+    
+    # Main mountain body - use a stretched sphere for natural mountain shape
+    glPushMatrix()
+    glScalef(width/200, depth/200, height/200)  # Scale to desired mountain size
+    gluSphere(quad, 100, 12, 8)  # Base mountain shape
+    glPopMatrix()
+
+    glPopMatrix()
+
+
 
 def draw_all_structures():
     """Draw complete castle complex"""
@@ -723,17 +940,14 @@ def show_screen():
     glViewport(0, 0, 1000, 800)
     setup_camera()
     
-    # Draw larger ground
-    glColor3f(0.2, 0.6, 0.2)
-    glBegin(GL_QUADS)
-    glVertex3f(-GRID_LENGTH*20, GRID_LENGTH*20, 0)
-    glVertex3f(GRID_LENGTH*20, GRID_LENGTH*20, 0)
-    glVertex3f(GRID_LENGTH*20, -GRID_LENGTH*20, 0)
-    glVertex3f(-GRID_LENGTH*20, -GRID_LENGTH*20, 0)
-    glEnd()
+    # Draw multi-colored grid floor with various green shades
+    draw_multi_colored_grid()
     
     # Draw structures
     draw_all_structures()
+    draw_mountain_range()
+    # Draw minimal vegetation (15 trees + 25 bushes)
+    draw_minimal_vegetation()
     
     # Display info
     draw_text(10, 770, f"Castle Complex with Perimeter Wall - {len(castle_configs)} Castles")
