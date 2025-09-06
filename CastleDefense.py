@@ -3,11 +3,12 @@ from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from math import sin, cos, atan2, radians, sqrt
 
-GRID_LENGTH = 500
+GRID_LENGTH = 1600
 cam_angle_h = 45
 cam_angle_v = 30
-cam_dist = 4000  # Increased for better view of perimeter wall
+cam_dist = 8000  # Increased for better view of perimeter wall
 fovY = 60
+
 
 # Castle configurations
 castle_configs = [
@@ -15,6 +16,7 @@ castle_configs = [
         'position': [-800, -1600, 0],
         'size': 1600,
         'height': 800,
+        'roof_z': 600,   # actual roof/platform height
         'tower_radius': 160,
         'floors': 7,
         'wall_thickness': 300,
@@ -25,6 +27,7 @@ castle_configs = [
         'position': [900, 1000, 0],    # Biggest castle - EXCLUDED from wall
         'size': 1600,
         'height': 1200,
+        'roof_z': 800,   # actual roof height
         'tower_radius': 180,
         'floors': 12,
         'wall_thickness': 400,
@@ -35,6 +38,7 @@ castle_configs = [
         'position': [-3300, 400, 0],
         'size': 2000,
         'height': 600,
+        'roof_z': 450,   # actual roof height
         'tower_radius': 120,
         'floors': 3,
         'wall_thickness': 300,
@@ -45,6 +49,13 @@ castle_configs = [
 
 # Central rock tower position
 central_rock_pos = [-1000, 1500, 0]
+
+player_pos = [central_rock_pos[0], central_rock_pos[1], central_rock_pos[2] + 1630]
+player_speed = 50          # movement step size
+player_angle = 0           # in degrees, 0 = facing along +Y
+player_turn_speed = 5      # degrees per key press
+
+
 
 def get_color_scheme(scheme_name, base_color):
     """Get color based on scheme"""
@@ -110,6 +121,79 @@ def draw_cube_manual_shading(x, y, z, dx, dy, dz, base_color):
     
     glEnd()
     glPopMatrix()
+
+from math import radians
+from OpenGL.GL import *
+from OpenGL.GLU import *
+
+def draw_human(x, y, z, scale=80):
+    """Draw a humanoid figure with blue torso, skin-colored limbs, and arms pointing forward."""
+    global player_angle
+    quad = gluNewQuadric()
+    glPushMatrix()
+    
+    # Move to human position
+    glTranslatef(x, y, z)
+    
+    # Rotate human to face player_angle
+    glRotatef(player_angle, 0, 0, 1)  # rotate around Z-axis
+    
+    # Scale human
+    glScalef(scale/100, scale/100, scale/100)
+    
+    # Torso (blue shirt)
+    draw_cube_manual_shading(0, 0, 120, 80, 40, 150, [0.2, 0.4, 1.0])
+    
+    # Head (skin color)
+    glPushMatrix()
+    glTranslatef(0, 0, 250)
+    glColor3f(1.0, 0.8, 0.6)
+    gluSphere(quad, 50, 16, 16)
+    glPopMatrix()
+    
+    # Arms (skin color) - pointing forward
+    arm_radius = 15
+    arm_length = 100
+    glColor3f(1.0, 0.8, 0.6)
+
+    # Right arm
+    glPushMatrix()
+    glTranslatef(60, 0, 180)  # shoulder position
+    glRotatef(-90, 1, 0, 0)   # point forward
+    gluCylinder(quad, arm_radius, arm_radius, arm_length, 8, 8)
+    glPopMatrix()
+
+    # Left arm
+    glPushMatrix()
+    glTranslatef(-60, 0, 180)  # shoulder position
+    glRotatef(-90, 1, 0, 0)    # point forward
+    gluCylinder(quad, arm_radius, arm_radius, arm_length, 8, 8)
+    glPopMatrix()
+    
+    # Legs (skin color)
+    leg_radius = 20
+    leg_length = 120
+    glColor3f(1.0, 0.8, 0.6)
+
+    # Right leg
+    glPushMatrix()
+    glTranslatef(25, 0, 0)
+    glRotatef(0, 1, 0, 0)
+    gluCylinder(quad, leg_radius, leg_radius, leg_length, 8, 8)
+    glPopMatrix()
+
+    # Left leg
+    glPushMatrix()
+    glTranslatef(-25, 0, 0)
+    glRotatef(0, 1, 0, 0)
+    gluCylinder(quad, leg_radius, leg_radius, leg_length, 8, 8)
+    glPopMatrix()
+
+    glPopMatrix()
+
+
+
+
 
 def draw_perimeter_wall():
     """Draw perimeter wall around all buildings except the biggest castle"""
@@ -880,8 +964,6 @@ def draw_rocky_mountain(x, y, z, width=800, height=600, depth=600):
 
     glPopMatrix()
 
-
-
 def draw_all_structures():
     """Draw complete castle complex"""
     # Individual castles
@@ -898,6 +980,8 @@ def draw_all_structures():
     
     # PERIMETER WALL - encapsulates everything except biggest castle
     draw_perimeter_wall()
+
+    draw_human(player_pos[0], player_pos[1], player_pos[2], scale=60)
 
 def draw_text(x, y, text, font=GLUT_BITMAP_HELVETICA_18):
     """Draw text on screen"""
@@ -918,6 +1002,45 @@ def draw_text(x, y, text, font=GLUT_BITMAP_HELVETICA_18):
     glMatrixMode(GL_PROJECTION)
     glPopMatrix()
     glMatrixMode(GL_MODELVIEW)
+
+def clamp_player_position():
+    """Clamp player inside allowed zones so he cannot cross boundaries."""
+    global player_pos
+
+    x, y, z = player_pos
+
+    # Castle roofs
+    for castle in castle_configs:
+        half = castle['size'] / 2
+        x_min, x_max = castle['position'][0] - half, castle['position'][0] + half
+        y_min, y_max = castle['position'][1] - half, castle['position'][1] + half
+        z_min, z_max = castle['position'][2], castle['position'][2] + castle['height']
+        
+        # Only clamp if player is within roof Z range
+        if z_min <= z <= z_max:
+            player_pos[0] = max(x_min, min(x, x_max))
+            player_pos[1] = max(y_min, min(y, y_max))
+            return
+
+    # Central rock platform
+    rock_x, rock_y, rock_z = central_rock_pos
+    rock_radius = 220
+    rock_height = 1600 + 150
+    if rock_z <= z <= rock_z + rock_height:
+        player_pos[0] = max(rock_x - rock_radius, min(x, rock_x + rock_radius))
+        player_pos[1] = max(rock_y - rock_radius, min(y, rock_y + rock_radius))
+        return
+
+    # Perimeter guard tower area (approx)
+    min_x = min([c['position'][0] - c['size']/2 for c in castle_configs]) - 500
+    max_x = max([c['position'][0] + c['size']/2 for c in castle_configs]) + 500
+    min_y = min([c['position'][1] - c['size']/2 for c in castle_configs]) - 500
+    max_y = max([c['position'][1] + c['size']/2 for c in castle_configs]) + 500
+    if 0 <= z <= 600:
+        player_pos[0] = max(min_x, min(x, max_x))
+        player_pos[1] = max(min_y, min(y, max_y))
+        return
+
 
 def setup_camera():
     """Setup camera perspective"""
@@ -971,13 +1094,47 @@ def handle_special_keys(key, x, y):
     glutPostRedisplay()
 
 def handle_keyboard(key, x, y):
-    """Handle keyboard input"""
-    global cam_dist
-    if key == b'z':
+    """Keyboard input: camera, movement, rotation, teleport, with boundary clamping."""
+    global cam_dist, player_pos, player_angle, player_speed, player_turn_speed
+    k = key.decode("utf-8").lower()
+
+    # Camera zoom
+    if k == 'z':
         cam_dist = max(1000, cam_dist - 150)
-    elif key == b'x':
+    elif k == 'x':
         cam_dist = min(25000, cam_dist + 150)
+
+    # Player rotation
+    elif k == 'a':
+        player_angle += player_turn_speed
+    elif k == 'd':
+        player_angle -= player_turn_speed
+
+    # Move player forward/backward
+    elif k == 'w':
+        rad = radians(player_angle + 90)
+        player_pos[0] += player_speed * cos(rad)
+        player_pos[1] += player_speed * sin(rad)
+        clamp_player_position()
+    elif k == 's':
+        rad = radians(player_angle + 90)
+        player_pos[0] -= player_speed * cos(rad)
+        player_pos[1] -= player_speed * sin(rad)
+        clamp_player_position()
+
+    # Teleport to castle roofs
+    elif k in ['1', '2', '3']:
+        index = int(k) - 1
+        castle = castle_configs[index]
+        player_pos[0] = castle['position'][0]
+        player_pos[1] = castle['position'][1]
+        player_pos[2] = castle['position'][2] + castle['roof_z'] + 75
+        clamp_player_position()
+
     glutPostRedisplay()
+
+
+
 
 def main():
     """Main function"""
@@ -988,7 +1145,7 @@ def main():
     glutCreateWindow(b"Castle Complex with Perimeter Wall")
     
     glEnable(GL_DEPTH_TEST)
-    glDepthFunc(GL_LESS)
+    # glDepthFunc(GL_LESS)
     
     glutDisplayFunc(show_screen)
     glutKeyboardFunc(handle_keyboard)
