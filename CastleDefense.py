@@ -3,12 +3,12 @@ from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from math import sin, cos, atan2, radians, sqrt
 
-GRID_LENGTH = 1600
+# Global variables
+GRID_LENGTH = 500
 cam_angle_h = 45
 cam_angle_v = 30
-cam_dist = 8000  # Increased for better view of perimeter wall
+cam_dist = 4000
 fovY = 60
-
 
 # Castle configurations
 castle_configs = [
@@ -16,7 +16,7 @@ castle_configs = [
         'position': [-800, -1600, 0],
         'size': 1600,
         'height': 800,
-        'roof_z': 600,   # actual roof/platform height
+        'roof_z': 600,
         'tower_radius': 160,
         'floors': 7,
         'wall_thickness': 300,
@@ -24,10 +24,10 @@ castle_configs = [
         'color_scheme': 'reddish'
     },
     {
-        'position': [900, 1000, 0],    # Biggest castle - EXCLUDED from wall
+        'position': [900, 1000, 0],
         'size': 1600,
         'height': 1200,
-        'roof_z': 800,   # actual roof height
+        'roof_z': 800,
         'tower_radius': 180,
         'floors': 12,
         'wall_thickness': 400,
@@ -38,7 +38,7 @@ castle_configs = [
         'position': [-3300, 400, 0],
         'size': 2000,
         'height': 600,
-        'roof_z': 450,   # actual roof height
+        'roof_z': 450,
         'tower_radius': 120,
         'floors': 3,
         'wall_thickness': 300,
@@ -49,13 +49,11 @@ castle_configs = [
 
 # Central rock tower position
 central_rock_pos = [-1000, 1500, 0]
-
 player_pos = [central_rock_pos[0], central_rock_pos[1], central_rock_pos[2] + 1630]
-player_speed = 50          # movement step size
-player_angle = 0           # in degrees, 0 = facing along +Y
-player_turn_speed = 5      # degrees per key press
-
-
+player_speed = 50
+player_angle = 0
+player_turn_speed = 5
+teleport_skip_clamp = False
 
 def get_color_scheme(scheme_name, base_color):
     """Get color based on scheme"""
@@ -76,7 +74,6 @@ def draw_cube_manual_shading(x, y, z, dx, dy, dz, base_color):
     back_color = [c * 0.5 for c in base_color]
     
     glBegin(GL_QUADS)
-    
     # Top face (brightest)
     glColor3f(top_color[0], top_color[1], top_color[2])
     glVertex3f(-dx/2, dy/2, -dz/2)
@@ -118,17 +115,14 @@ def draw_cube_manual_shading(x, y, z, dx, dy, dz, base_color):
     glVertex3f(dx/2, -dy/2, -dz/2)
     glVertex3f(dx/2, -dy/2, dz/2)
     glVertex3f(-dx/2, -dy/2, dz/2)
-    
     glEnd()
+    
     glPopMatrix()
-
-from math import radians
-from OpenGL.GL import *
-from OpenGL.GLU import *
 
 def draw_human(x, y, z, scale=80):
     """Draw a humanoid figure with blue torso, skin-colored limbs, and arms pointing forward."""
     global player_angle
+    
     quad = gluNewQuadric()
     glPushMatrix()
     
@@ -136,7 +130,7 @@ def draw_human(x, y, z, scale=80):
     glTranslatef(x, y, z)
     
     # Rotate human to face player_angle
-    glRotatef(player_angle, 0, 0, 1)  # rotate around Z-axis
+    glRotatef(player_angle, 0, 0, 1)
     
     # Scale human
     glScalef(scale/100, scale/100, scale/100)
@@ -155,18 +149,18 @@ def draw_human(x, y, z, scale=80):
     arm_radius = 15
     arm_length = 100
     glColor3f(1.0, 0.8, 0.6)
-
+    
     # Right arm
     glPushMatrix()
-    glTranslatef(60, 0, 180)  # shoulder position
-    glRotatef(-90, 1, 0, 0)   # point forward
+    glTranslatef(60, 0, 180)
+    glRotatef(-90, 1, 0, 0)
     gluCylinder(quad, arm_radius, arm_radius, arm_length, 8, 8)
     glPopMatrix()
-
+    
     # Left arm
     glPushMatrix()
-    glTranslatef(-60, 0, 180)  # shoulder position
-    glRotatef(-90, 1, 0, 0)    # point forward
+    glTranslatef(-60, 0, 180)
+    glRotatef(-90, 1, 0, 0)
     gluCylinder(quad, arm_radius, arm_radius, arm_length, 8, 8)
     glPopMatrix()
     
@@ -174,36 +168,26 @@ def draw_human(x, y, z, scale=80):
     leg_radius = 20
     leg_length = 120
     glColor3f(1.0, 0.8, 0.6)
-
+    
     # Right leg
     glPushMatrix()
     glTranslatef(25, 0, 0)
-    glRotatef(0, 1, 0, 0)
     gluCylinder(quad, leg_radius, leg_radius, leg_length, 8, 8)
     glPopMatrix()
-
+    
     # Left leg
     glPushMatrix()
     glTranslatef(-25, 0, 0)
-    glRotatef(0, 1, 0, 0)
     gluCylinder(quad, leg_radius, leg_radius, leg_length, 8, 8)
     glPopMatrix()
-
+    
     glPopMatrix()
-
-
-
-
 
 def draw_perimeter_wall():
     """Draw perimeter wall around all buildings except the biggest castle"""
-    # Define perimeter wall boundaries
-    # Include: castle[0], castle[2], and central rock tower
-    # Exclude: castle[1] (biggest castle)
-    
     wall_thickness = 200
     wall_height = 400
-    wall_color = [0.7, 0.7, 0.6]  # Light gray wall
+    wall_color = [0.7, 0.7, 0.6]
     
     # Calculate bounding box for buildings to encapsulate (excluding biggest castle)
     buildings_to_encapsulate = [
@@ -220,29 +204,22 @@ def draw_perimeter_wall():
     
     # Define wall segments (rectangular perimeter)
     wall_segments = [
-        # North wall
-        (min_x, max_y, max_x, max_y),
-        # East wall  
-        (max_x, max_y, max_x, min_y),
-        # South wall
-        (max_x, min_y, min_x, min_y),
-        # West wall
-        (min_x, min_y, min_x, max_y)
+        (min_x, max_y, max_x, max_y),  # North wall
+        (max_x, max_y, max_x, min_y),  # East wall
+        (max_x, min_y, min_x, min_y),  # South wall
+        (min_x, min_y, min_x, max_y)   # West wall
     ]
     
     for x1, y1, x2, y2 in wall_segments:
         draw_wall_segment(x1, y1, x2, y2, 0, wall_thickness, wall_height, wall_color)
-        
-        # Add stone block texture to perimeter walls
         draw_perimeter_stone_blocks(x1, y1, x2, y2, 0, wall_thickness, wall_height)
-
-    # Collect all unique corner positions from wall segments
+    
+    # Draw guard towers at corners
     corners = set()
     for x1, y1, x2, y2 in wall_segments:
-        corners.add((x1, y1))  # Start point
-        corners.add((x2, y2))  # End point
-
-    # Draw guard towers at all unique corners (guaranteed 4 corners)
+        corners.add((x1, y1))
+        corners.add((x2, y2))
+    
     for corner_x, corner_y in corners:
         draw_guard_tower(corner_x, corner_y, wall_height)
 
@@ -256,7 +233,6 @@ def draw_wall_segment(x1, y1, x2, y2, offset_z, thickness, height, color):
     glTranslatef(midx, midy, offset_z + height/2)
     angle = atan2(y2 - y1, x2 - x1) * 180 / 3.14159
     glRotatef(angle, 0, 0, 1)
-    
     draw_cube_manual_shading(0, 0, 0, length, thickness, height, color)
     glPopMatrix()
 
@@ -264,17 +240,14 @@ def draw_perimeter_stone_blocks(x1, y1, x2, y2, offset_z, thickness, height):
     """Draw stone blocks on perimeter walls"""
     length = ((x2 - x1)**2 + (y2 - y1)**2) ** 0.5
     angle = atan2(y2 - y1, x2 - x1) * 180 / 3.14159
-    
     block_width, block_height, gap = 150, 80, 15
     blocks_x = int(length / (block_width + gap))
     blocks_z = int(height / (block_height + gap))
-    
     midx, midy = (x1 + x2) / 2, (y1 + y2) / 2
     
     for row in range(blocks_z):
         for col in range(blocks_x):
             offset = (block_width + gap) / 2 if (row % 2 == 1) else 0
-            
             block_x_local = -length/2 + col * (block_width + gap) + block_width/2 + offset
             block_z_local = row * (block_height + gap) + block_height/2
             
@@ -289,7 +262,6 @@ def draw_perimeter_stone_blocks(x1, y1, x2, y2, offset_z, thickness, height):
             # Color variation for perimeter wall blocks
             base_r, base_g, base_b = 0.75, 0.75, 0.65
             variation = 0.1 * ((row + col) % 4 - 2) / 2
-            
             block_color = [
                 min(max(base_r + variation, 0.0), 1.0),
                 min(max(base_g + variation, 0.0), 1.0),
@@ -316,10 +288,9 @@ def draw_guard_tower(x, y, wall_height):
     
     # Tower roof
     glTranslatef(0, 0, tower_height)
-    roof_color = [0.8, 0.3, 0.2]  # Red roof
+    roof_color = [0.8, 0.3, 0.2]
     glColor3f(roof_color[0], roof_color[1], roof_color[2])
     gluCylinder(quad, tower_radius + 10, 5, tower_radius, 12, 12)
-    
     glPopMatrix()
     
     # Battlements around tower top
@@ -334,52 +305,40 @@ def draw_rope(start_pos, end_pos, segments=20):
     """Draw a rope between two points with sagging effect"""
     x1, y1, z1 = start_pos
     x2, y2, z2 = end_pos
-    
-    glColor3f(0.4, 0.3, 0.2)  # Brown rope color
+    glColor3f(0.4, 0.3, 0.2)
     glLineWidth(3.0)
     
-    # Calculate rope sag
     distance = sqrt((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)
     sag_factor = min(100, distance * 0.1)
     
     glBegin(GL_LINE_STRIP)
     for i in range(segments + 1):
         t = i / segments
-        
-        # Linear interpolation
         x = x1 + t * (x2 - x1)
         y = y1 + t * (y2 - y1)
         z = z1 + t * (z2 - z1)
-        
-        # Add sag (parabolic curve)
         sag = sag_factor * (4 * t * (1 - t))
         z -= sag
-        
         glVertex3f(x, y, z)
     glEnd()
-    
     glLineWidth(1.0)
 
 def draw_rope_support_bar(x, y, z, height=200):
     """Draw a vertical bar to support ropes"""
-    glColor3f(0.3, 0.3, 0.3)  # Dark gray
+    glColor3f(0.3, 0.3, 0.3)
     bar_radius = 8
     
-    # Main pole
     quad = gluNewQuadric()
     glPushMatrix()
     glTranslatef(x, y, z)
     gluCylinder(quad, bar_radius, bar_radius, height, 16, 16)
     
-    # Top cap
     glTranslatef(0, 0, height)
     gluDisk(quad, 0, bar_radius, 16, 1)
     
-    # Cross beam on top for rope attachment
     glTranslatef(0, 0, 5)
     glRotatef(90, 0, 1, 0)
     gluCylinder(quad, 5, 5, 30, 8, 8)
-    
     glPopMatrix()
 
 def draw_platform_with_gap(x, y, z, radius, gap_angle_start=0, gap_angle_end=45, color_scheme='normal'):
@@ -392,15 +351,12 @@ def draw_platform_with_gap(x, y, z, radius, gap_angle_start=0, gap_angle_end=45,
     glTranslatef(x, y, z + platform_thickness/2)
     glColor3f(platform_color[0], platform_color[1], platform_color[2])
     
-    # Draw platform in segments to create gap
     segments = 36
     segment_angle = 360 / segments
-    
     for i in range(segments):
         current_angle = i * segment_angle
         next_angle = (i + 1) * segment_angle
         
-        # Skip segments that fall within the gap
         if not (gap_angle_start <= current_angle <= gap_angle_end):
             glBegin(GL_TRIANGLES)
             glVertex3f(0, 0, 0)
@@ -412,7 +368,7 @@ def draw_platform_with_gap(x, y, z, radius, gap_angle_start=0, gap_angle_end=45,
     
     glPopMatrix()
     
-    # Add battlements around platform (excluding gap area)
+    # Add battlements around platform
     battlement_base = [0.55, 0.55, 0.55]
     battlement_color = get_color_scheme(color_scheme, battlement_base)
     battlement_z = z + platform_thickness
@@ -431,7 +387,6 @@ def draw_tower_with_platform(offset_x, offset_y, offset_z, radius=160, height=80
     # Draw main tower
     glPushMatrix()
     glTranslatef(offset_x, offset_y, offset_z)
-    
     base_stone_color = [0.82, 0.8, 0.72]
     stone_color = get_color_scheme(color_scheme, base_stone_color)
     glColor3f(stone_color[0], stone_color[1], stone_color[2])
@@ -454,13 +409,9 @@ def draw_tower_with_platform(offset_x, offset_y, offset_z, radius=160, height=80
     # Add platform with gap for stairs
     platform_z = offset_z + height
     platform_radius = radius + 30
-    
-    # Create gap facing outward from castle center
     gap_start = 315
     gap_end = 45
-    
-    draw_platform_with_gap(offset_x, offset_y, platform_z, platform_radius,
-                          gap_start, gap_end, color_scheme)
+    draw_platform_with_gap(offset_x, offset_y, platform_z, platform_radius, gap_start, gap_end, color_scheme)
     
     # Add central structure on platform
     central_base = [0.8, 0.8, 0.75]
@@ -468,43 +419,31 @@ def draw_tower_with_platform(offset_x, offset_y, offset_z, radius=160, height=80
     draw_cube_manual_shading(offset_x, offset_y, platform_z + 40, 60, 60, 80, central_color)
 
 def draw_rock_tower():
-    """Draw central rock tower - SMALLER, just bigger than biggest castle"""
+    """Draw central rock tower"""
     x, y, z = central_rock_pos
     rock_color = [0.4, 0.4, 0.35]
     
-    # Base level - bigger and taller to fill gaps
+    # Multiple levels
     draw_cube_manual_shading(x, y, z + 256, 352, 330, 413, rock_color)
-    
-    # Second level - bigger to overlap and fill gaps
     draw_cube_manual_shading(x - 15, y + 8, z + 650, 308, 286, 375, rock_color)
-    
-    # Third level - bigger to fill gaps
     draw_cube_manual_shading(x + 12, y - 10, z + 1006, 264, 242, 338, rock_color)
-    
-    # Fourth level - bigger to fill gaps
     draw_cube_manual_shading(x - 5, y + 5, z + 1300, 220, 198, 250, rock_color)
-    
-    # Peak - bigger to fill gaps
     draw_cube_manual_shading(x, y, z + 1488, 165, 154, 125, rock_color)
 
 def draw_rock_tower_platform():
-    """Draw simple platform on top of smaller rock tower"""
+    """Draw simple platform on top of rock tower"""
     x, y, z = central_rock_pos
     platform_height = z + 1600
-    
-    # Simple circular platform
     platform_radius = 120
     platform_thickness = 30
     platform_color = [0.6, 0.6, 0.55]
     
     glColor3f(platform_color[0], platform_color[1], platform_color[2])
-    # Main platform disc
     draw_filled_circle(x, y, platform_height + platform_thickness/2, platform_radius)
     
-    # Simple low railing around the edge
+    # Railing around the edge
     railing_color = [0.5, 0.5, 0.45]
     railing_height = platform_height + platform_thickness + 10
-    
     for angle in range(0, 360, 30):
         rad = radians(angle)
         rail_x = x + (platform_radius - 10) * cos(rad)
@@ -515,29 +454,24 @@ def draw_filled_circle(x, y, z, radius, segments=32):
     """Draw a filled circular plate using triangle fan"""
     glPushMatrix()
     glTranslatef(x, y, z)
-    
     glBegin(GL_TRIANGLE_FAN)
     glVertex3f(0.0, 0.0, 0.0)
-    
     for i in range(segments + 1):
         angle = 2 * 3.14159 * i / segments
         px = radius * cos(angle)
         py = radius * sin(angle)
         glVertex3f(px, py, 0.0)
     glEnd()
-    
     glPopMatrix()
 
 def draw_spiral_stairs_around_rock():
-    """Draw spiral stairs around smaller rock tower"""
+    """Draw spiral stairs around rock tower"""
     x, y, z = central_rock_pos
-    
     radius = 220
     steps = 80
     total_height = 1600
     height_per_step = total_height / steps
     angle_per_step = 1800 / steps
-    
     stair_color = [0.6, 0.5, 0.4]
     
     for i in range(steps):
@@ -551,28 +485,22 @@ def draw_spiral_stairs_around_rock():
         glRotatef(angle_per_step * i, 0, 0, 1)
         draw_cube_manual_shading(0, 0, 0, 100, 50, 15, stair_color)
         
-        # Support pillars every 10 steps
         if i % 10 == 0:
             draw_cube_manual_shading(0, 0, -50, 25, 25, 100, stair_color)
-        
         glPopMatrix()
 
 def draw_rope_connections():
     """Draw ropes connecting towers to castle centers and rock tower"""
     for config in castle_configs:
         pos = config['position']
-        size = config['size']
         wall_height = config['wall_height']
         
-        # Castle center bar positioned above the walls
         castle_center_height = pos[2] + wall_height
         castle_center = [pos[0], pos[1], castle_center_height]
         
-        # Place rope support bar at castle center
         bar_height = 350
         draw_rope_support_bar(castle_center[0], castle_center[1], castle_center[2], bar_height)
         
-        # Connect castle center to rock tower
         center_bar_top = [castle_center[0], castle_center[1], castle_center[2] + bar_height - 50]
         rock_platform = [central_rock_pos[0], central_rock_pos[1], central_rock_pos[2] + 1600 + 150]
         draw_rope(center_bar_top, rock_platform)
@@ -590,11 +518,9 @@ def draw_wall(x1, y1, x2, y2, offset_z, thickness=400, height=600, color_scheme=
     glTranslatef(midx, midy, offset_z + height/2)
     angle = atan2(y2 - y1, x2 - x1) * 180 / 3.14159
     glRotatef(angle, 0, 0, 1)
-    
     wall_base = [0.85, 0.82, 0.75]
     wall_color = get_color_scheme(color_scheme, wall_base)
     draw_cube_manual_shading(0, 0, 0, length, thickness, height, wall_color)
-    
     glPopMatrix()
 
 def draw_stone_block(x, y, z, width, depth, height, angle, row, col, color_scheme='normal'):
@@ -606,7 +532,6 @@ def draw_stone_block(x, y, z, width, depth, height, angle, row, col, color_schem
     # Color variation
     base_r, base_g, base_b = 0.85, 0.40, 0.35
     variation = 0.12 * ((row + col) % 5 - 2) / 2
-    
     stone_color = [
         min(max(base_r + variation, 0.0), 1.0),
         min(max(base_g + variation, 0.0), 1.0),
@@ -615,24 +540,20 @@ def draw_stone_block(x, y, z, width, depth, height, angle, row, col, color_schem
     
     final_color = get_color_scheme(color_scheme, stone_color)
     draw_cube_manual_shading(0, 0, 0, width, depth, height, final_color)
-    
     glPopMatrix()
 
 def draw_stone_blocks(x1, y1, x2, y2, offset_z, thickness, height, color_scheme='normal'):
     """Draw stone blocks on walls"""
     length = ((x2 - x1)**2 + (y2 - y1)**2) ** 0.5
     angle = atan2(y2 - y1, x2 - x1) * 180 / 3.14159
-    
     block_width, block_height, gap = 200, 100, 20
     blocks_x = int(length / (block_width + gap))
     blocks_z = int(height / (block_height + gap))
-    
     midx, midy = (x1 + x2) / 2, (y1 + y2) / 2
     
     for row in range(blocks_z):
         for col in range(blocks_x):
             offset = (block_width + gap) / 2 if (row % 2 == 1) else 0
-            
             block_x_local = -length/2 + col * (block_width + gap) + block_width/2 + offset
             block_z_local = row * (block_height + gap) + block_height/2
             
@@ -644,8 +565,7 @@ def draw_stone_blocks(x1, y1, x2, y2, offset_z, thickness, height, color_scheme=
             world_y = midy + block_x_local * sin_a
             world_z = offset_z + block_z_local + 15
             
-            draw_stone_block(world_x, world_y, world_z, block_width,
-                           thickness + 5, block_height, angle, row, col, color_scheme)
+            draw_stone_block(world_x, world_y, world_z, block_width, thickness + 5, block_height, angle, row, col, color_scheme)
 
 def draw_single_castle(config):
     """Draw individual castle"""
@@ -686,7 +606,7 @@ def draw_single_castle(config):
         draw_wall(wall_x1, wall_y1, wall_x2, wall_y2, pos[2], wall_thickness, wall_height, color_scheme)
         draw_stone_blocks(wall_x1, wall_y1, wall_x2, wall_y2, pos[2], wall_thickness, wall_height, color_scheme)
     
-    # ADD RAILINGS ON TOP OF CASTLE WALLS
+    # Add railings on top of castle walls
     railing_height = 80
     railing_color = get_color_scheme(color_scheme, [0.6, 0.6, 0.55])
     railing_top_z = pos[2] + wall_height + railing_height/2
@@ -703,17 +623,14 @@ def draw_single_castle(config):
         wall_x1, wall_y1 = x1 + dx_norm, y1 + dy_norm
         wall_x2, wall_y2 = x2 - dx_norm, y2 - dy_norm
         
-        # Calculate railing positions along the wall
-        num_railings = int(length / 100)  # One railing every 100 units
+        num_railings = int(length / 100)
         for j in range(num_railings + 1):
             t = j / max(num_railings, 1)
             rail_x = wall_x1 + t * (wall_x2 - wall_x1)
             rail_y = wall_y1 + t * (wall_y2 - wall_y1)
-            
-            # Draw vertical railing post
             draw_cube_manual_shading(rail_x, rail_y, railing_top_z, 15, 15, railing_height, railing_color)
     
-    # Add horizontal railing bars connecting the posts
+    # Add horizontal railing bars
     railing_bar_color = get_color_scheme(color_scheme, [0.65, 0.65, 0.6])
     for i in range(len(corners)):
         x1, y1 = corners[i]
@@ -726,7 +643,6 @@ def draw_single_castle(config):
         wall_x1, wall_y1 = x1 + dx_norm, y1 + dy_norm
         wall_x2, wall_y2 = x2 - dx_norm, y2 - dy_norm
         
-        # Draw horizontal railing bar
         midx = (wall_x1 + wall_x2) / 2
         midy = (wall_y1 + wall_y2) / 2
         
@@ -737,31 +653,27 @@ def draw_single_castle(config):
         draw_cube_manual_shading(0, 0, 0, length - 2*wall_inset, 10, 8, railing_bar_color)
         glPopMatrix()
     
-    # Interior and gate (unchanged)
+    # Interior and gate
     interior_base = [0.82, 0.8, 0.72]
     gate_base = [0.3, 0.3, 0.3]
     interior_color = get_color_scheme(color_scheme, interior_base)
     gate_color = get_color_scheme(color_scheme, gate_base)
     
-    draw_cube_manual_shading(pos[0], pos[1], pos[2] + wall_height/2,
-                           size * 0.8, size * 0.8, wall_height, interior_color)
-    draw_cube_manual_shading(pos[0], pos[1] - half_size + wall_inset, pos[2] + wall_height/2,
-                           300, 80, wall_height, gate_color)
+    draw_cube_manual_shading(pos[0], pos[1], pos[2] + wall_height/2, size * 0.8, size * 0.8, wall_height, interior_color)
+    draw_cube_manual_shading(pos[0], pos[1] - half_size + wall_inset, pos[2] + wall_height/2, 300, 80, wall_height, gate_color)
 
 def draw_simple_tree(x, y, z, size=100):
-    """Draw a simple tree using larger spheres - computationally efficient"""
+    """Draw a simple tree using larger spheres"""
     quad = gluNewQuadric()
     
-    # Simple trunk (cylinder)
     glPushMatrix()
     glTranslatef(x, y, z)
-    glColor3f(0.4, 0.2, 0.1)  # Brown trunk
-    gluCylinder(quad, size*0.15, size*0.1, size*0.8, 6, 10)  # Low polygon count
+    glColor3f(0.4, 0.2, 0.1)
+    gluCylinder(quad, size*0.15, size*0.1, size*0.8, 6, 10)
     
-    # Large foliage sphere
     glTranslatef(0, 0, size*0.6)
-    glColor3f(0.1, 0.5, 0.1)  # Dark green
-    gluSphere(quad, size*0.6, 8, 8)  # Large sphere, low detail
+    glColor3f(0.1, 0.5, 0.1)
+    gluSphere(quad, size*0.6, 8, 8)
     glPopMatrix()
 
 def draw_simple_bush(x, y, z, size=60):
@@ -770,42 +682,31 @@ def draw_simple_bush(x, y, z, size=60):
     
     glPushMatrix()
     glTranslatef(x, y, z + size*0.4)
-    glColor3f(0.2, 0.4, 0.2)  # Medium green
-    gluSphere(quad, size*0.5, 6, 6)  # Large sphere, low detail
+    glColor3f(0.2, 0.4, 0.2)
+    gluSphere(quad, size*0.5, 6, 6)
     glPopMatrix()
 
 def draw_multi_colored_grid():
-    """Draw a grid with multiple shades of green - efficient and colorful"""
+    """Draw a grid with multiple shades of green"""
     grid_size = GRID_LENGTH * 20
-    quad_size = 800  # Size of each colored square
+    quad_size = 800
     num_quads = (grid_size * 2) // quad_size
     
-    # Define multiple green shades
     green_colors = [
-        [0.15, 0.4, 0.15],   # Dark green
-        [0.2, 0.5, 0.2],     # Medium dark green
-        [0.25, 0.6, 0.25],   # Regular green
-        [0.3, 0.7, 0.3],     # Medium light green
-        [0.35, 0.75, 0.35],  # Light green
-        [0.4, 0.8, 0.4],     # Very light green
-        [0.2, 0.45, 0.2],    # Forest green
-        [0.18, 0.55, 0.18]   # Grass green
+        [0.15, 0.4, 0.15], [0.2, 0.5, 0.2], [0.25, 0.6, 0.25], [0.3, 0.7, 0.3],
+        [0.35, 0.75, 0.35], [0.4, 0.8, 0.4], [0.2, 0.45, 0.2], [0.18, 0.55, 0.18]
     ]
     
-    # Draw colored grid squares
     for i in range(num_quads):
         for j in range(num_quads):
-            # Calculate square position
             x1 = -grid_size + i * quad_size
             y1 = -grid_size + j * quad_size
             x2 = x1 + quad_size
             y2 = y1 + quad_size
             
-            # Choose color based on position (creates a pattern)
             color_index = (i + j) % len(green_colors)
             color = green_colors[color_index]
             
-            # Draw colored square
             glColor3f(color[0], color[1], color[2])
             glBegin(GL_QUADS)
             glVertex3f(x1, y1, 0)
@@ -814,28 +715,23 @@ def draw_multi_colored_grid():
             glVertex3f(x1, y2, 0)
             glEnd()
     
-    # Draw grid lines for definition
-    glColor3f(0.1, 0.3, 0.1)  # Very dark green for grid lines
+    # Draw grid lines
+    glColor3f(0.1, 0.3, 0.1)
     glLineWidth(1.0)
     glBegin(GL_LINES)
-    
-    # Vertical lines
     for i in range(num_quads + 1):
         line_x = -grid_size + i * quad_size
-        glVertex3f(line_x, -grid_size, 1)  # Slightly above ground
+        glVertex3f(line_x, -grid_size, 1)
         glVertex3f(line_x, grid_size, 1)
     
-    # Horizontal lines  
     for j in range(num_quads + 1):
         line_y = -grid_size + j * quad_size
         glVertex3f(-grid_size, line_y, 1)
         glVertex3f(grid_size, line_y, 1)
-    
     glEnd()
 
 def draw_minimal_vegetation():
-    """Add minimal vegetation - only 15 trees and 25 bushes for efficiency"""
-    # Fixed positions to avoid random generation overhead
+    """Add minimal vegetation"""
     tree_positions = [
         (-5000, -3000), (-4000, 2000), (-2000, -4000), (3000, -2000), (4000, 3000),
         (-6000, 1000), (2000, -5000), (5000, -1000), (-1000, -6000), (6000, 2000),
@@ -850,141 +746,82 @@ def draw_minimal_vegetation():
         (-6000, -1000), (1000, -6000), (6000, 1000), (-1000, 6000), (0, -4000)
     ]
     
-    # Check if position is safe (avoid buildings)
     def is_safe_position(x, y):
-        # Simple distance check from castle centers
         castle_centers = [[-800, -1600], [900, 1000], [-3300, 400], [-1000, 1500]]
         for cx, cy in castle_centers:
             if sqrt((x - cx)**2 + (y - cy)**2) < 900:
                 return False
         return True
     
-    # Draw trees (larger, fewer)
     for x, y in tree_positions:
         if is_safe_position(x, y):
-            draw_simple_tree(x, y, 30, 240)  # Larger trees
+            draw_simple_tree(x, y, 30, 240)
     
-    # Draw bushes (larger, fewer)
     for x, y in bush_positions:
         if is_safe_position(x, y):
-            draw_simple_bush(x, y, 0, 190)  # Larger bushes
-
+            draw_simple_bush(x, y, 0, 190)
 
 def draw_mountain_range():
-    """Draw dense clusters of rocky mountains around the scene - with more spacing"""
-    # Mountains spaced further apart for better visual separation
+    """Draw dense clusters of rocky mountains around the scene"""
     mountain_positions = [
-        # NORTH CLUSTER (more spread out)
-        (-2746, 6714, 0, 825, 1079, 740),
-        (-1150, 8828, 0, 942, 1077, 652),
-        (-2708, 7358, 0, 1358, 744, 816),
-        (-1368, 8630, 0, 895, 811, 719),
-        (-2883, 7216, 0, 827, 987, 701),
-        (-1100, 9100, 0, 1200, 900, 800),
+        # NORTH CLUSTER
+        (-2746, 6714, 0, 825, 1079, 740), (-1150, 8828, 0, 942, 1077, 652),
+        (-2708, 7358, 0, 1358, 744, 816), (-1368, 8630, 0, 895, 811, 719),
+        (-2883, 7216, 0, 827, 987, 701), (-1100, 9100, 0, 1200, 900, 800),
         (-2600, 6900, 0, 1000, 850, 750),
-        
-        # SOUTH CLUSTER (more spread out)
-        (-167, -6735, 0, 1358, 914, 712),
-        (-2441, -8797, 0, 1084, 703, 681),
-        (-186, -6968, 0, 1148, 842, 679),
-        (-2680, -8619, 0, 1144, 752, 647),
-        (-511, -7301, 0, 1167, 876, 735),
-        (-2300, -8800, 0, 1100, 800, 700),
+        # SOUTH CLUSTER
+        (-167, -6735, 0, 1358, 914, 712), (-2441, -8797, 0, 1084, 703, 681),
+        (-186, -6968, 0, 1148, 842, 679), (-2680, -8619, 0, 1144, 752, 647),
+        (-511, -7301, 0, 1167, 876, 735), (-2300, -8800, 0, 1100, 800, 700),
         (-800, -7000, 0, 900, 750, 650),
-        
-        # EAST CLUSTER (more spread out)
-        (6644, -1653, 0, 1270, 974, 663),
-        (8987, -320, 0, 1365, 850, 785),
-        (7191, -2204, 0, 871, 723, 716),
-        (9391, -104, 0, 881, 819, 651),
-        (6989, -2116, 0, 1264, 1025, 786),
-        (9100, 200, 0, 1000, 900, 750),
+        # EAST CLUSTER
+        (6644, -1653, 0, 1270, 974, 663), (8987, -320, 0, 1365, 850, 785),
+        (7191, -2204, 0, 871, 723, 716), (9391, -104, 0, 881, 819, 651),
+        (6989, -2116, 0, 1264, 1025, 786), (9100, 200, 0, 1000, 900, 750),
         (6800, -2000, 0, 1200, 850, 700),
-        
-        # WEST CLUSTER (more spread out)
-        (-7234, 479, 0, 1163, 807, 736),
-        (-8682, -1201, 0, 873, 1011, 687),
-        (-6854, 846, 0, 1050, 783, 836),
-        (-9012, -1624, 0, 1370, 812, 766),
-        (-6614, 894, 0, 857, 817, 616),
-        (-8900, -1400, 0, 1100, 950, 800),
-        (-7200, 700, 0, 950, 800, 650),
-        
-        # NORTHEAST CLUSTER (more spread out)
-        (5000, 4500, 0, 1000, 800, 700),
-        (7300, 6800, 0, 850, 750, 650),
-        (4800, 4600, 0, 1200, 900, 800),
-        (7100, 6300, 0, 950, 850, 750),
-        
-        # NORTHWEST CLUSTER (more spread out)
-        (-7000, 4500, 0, 1100, 900, 750),
-        (-5400, 6800, 0, 900, 800, 700),
-        (-6700, 4600, 0, 1250, 950, 850),
-        (-5200, 6200, 0, 1000, 850, 750),
-        
-        # SOUTHEAST CLUSTER (more spread out)
-        (5000, -6500, 0, 1050, 850, 700),
-        (7300, -4200, 0, 950, 800, 650),
-        (4800, -6800, 0, 1150, 900, 750),
-        (7100, -4600, 0, 900, 750, 700),
-        
-        # SOUTHWEST CLUSTER (more spread out)
-        (-7000, -6500, 0, 1200, 950, 800),
-        (-5300, -4800, 0, 800, 700, 600),
-        (-6700, -6300, 0, 1100, 900, 750),
-        (-5100, -4600, 0, 950, 800, 700),
+        # WEST CLUSTER
+        (-7234, 479, 0, 1163, 807, 736), (-8682, -1201, 0, 873, 1011, 687),
+        (-6854, 846, 0, 1050, 783, 836), (-9012, -1624, 0, 1370, 812, 766),
+        (-6614, 894, 0, 857, 817, 616), (-8900, -1400, 0, 1100, 950, 800),
+        (-7200, 700, 0, 950, 800, 650)
     ]
     
     for x, y, z, width, height, depth in mountain_positions:
         draw_rocky_mountain(x, y, z, width, height, depth)
 
-
-
-
-
-
-
-
 def draw_rocky_mountain(x, y, z, width=800, height=600, depth=600):
     """Draw a rocky mountain using quadric objects"""
     quad = gluNewQuadric()
-    
-    # Mountain base color (rocky gray-brown)
     base_color = [0.5, 0.4, 0.35]
     
     glPushMatrix()
     glTranslatef(x, y, z)
     glColor3f(base_color[0], base_color[1], base_color[2])
     
-    # Main mountain body - use a stretched sphere for natural mountain shape
     glPushMatrix()
-    glScalef(width/200, depth/200, height/200)  # Scale to desired mountain size
-    gluSphere(quad, 100, 12, 8)  # Base mountain shape
+    glScalef(width/200, depth/200, height/200)
+    gluSphere(quad, 100, 12, 8)
     glPopMatrix()
-
+    
     glPopMatrix()
 
 def draw_all_structures():
     """Draw complete castle complex"""
-    # Individual castles
     for config in castle_configs:
         draw_single_castle(config)
     
-    # Central rock tower with platform
     draw_rock_tower()
     draw_rock_tower_platform()
     draw_spiral_stairs_around_rock()
-    
-    # Rope connections
     draw_rope_connections()
-    
-    # PERIMETER WALL - encapsulates everything except biggest castle
     draw_perimeter_wall()
-
     draw_human(player_pos[0], player_pos[1], player_pos[2], scale=60)
 
-def draw_text(x, y, text, font=GLUT_BITMAP_HELVETICA_18):
+def draw_text(x, y, text, font=None):
     """Draw text on screen"""
+    if font is None:
+        font = GLUT_BITMAP_HELVETICA_18
+    
     glColor3f(1, 1, 1)
     glMatrixMode(GL_PROJECTION)
     glPushMatrix()
@@ -993,54 +830,129 @@ def draw_text(x, y, text, font=GLUT_BITMAP_HELVETICA_18):
     glMatrixMode(GL_MODELVIEW)
     glPushMatrix()
     glLoadIdentity()
-    
     glRasterPos2f(x, y)
     for ch in text:
         glutBitmapCharacter(font, ord(ch))
-    
     glPopMatrix()
     glMatrixMode(GL_PROJECTION)
     glPopMatrix()
     glMatrixMode(GL_MODELVIEW)
 
 def clamp_player_position():
-    """Clamp player inside allowed zones so he cannot cross boundaries."""
-    global player_pos
-
+    """FIXED COMPREHENSIVE COLLISION DETECTION - No return to center, proper boundaries"""
+    global player_pos, teleport_skip_clamp
+    
+    if teleport_skip_clamp:
+        teleport_skip_clamp = False
+        return
+    
     x, y, z = player_pos
-
-    # Castle roofs
-    for castle in castle_configs:
-        half = castle['size'] / 2
-        x_min, x_max = castle['position'][0] - half, castle['position'][0] + half
-        y_min, y_max = castle['position'][1] - half, castle['position'][1] + half
-        z_min, z_max = castle['position'][2], castle['position'][2] + castle['height']
+    
+    def get_castle_boundaries(castle_config):
+        """Get exact castle boundaries using railing coordinates"""
+        pos = castle_config['position']
+        size = castle_config['size']
+        wall_height = castle_config['wall_height']
+        wall_inset = 50  # Same as in draw_single_castle
         
-        # Only clamp if player is within roof Z range
-        if z_min <= z <= z_max:
-            player_pos[0] = max(x_min, min(x, x_max))
-            player_pos[1] = max(y_min, min(y, y_max))
+        half_size = size / 2
+        # Calculate actual wall boundaries (with inset)
+        min_x = pos[0] - half_size + wall_inset
+        max_x = pos[0] + half_size - wall_inset
+        min_y = pos[1] - half_size + wall_inset
+        max_y = pos[1] + half_size - wall_inset
+        z_min = 0
+        z_max = pos[2] + wall_height + 200  # Allow margin above walls
+        
+        return min_x, max_x, min_y, max_y, z_min, z_max
+    
+    # Check each castle individually
+    for i, castle in enumerate(castle_configs):
+        min_x, max_x, min_y, max_y, z_min, z_max = get_castle_boundaries(castle)
+        
+        # DEBUG: Print boundaries for Castle 3
+        if i == 2:  # Castle 3 at index 2
+            print(f"Castle 3 boundaries: X[{min_x}, {max_x}] Y[{min_y}, {max_y}] Z[{z_min}, {z_max}]")
+            print(f"Player at: ({x}, {y}, {z})")
+        
+        # Add buffer zone for detection
+        BUFFER_ZONE = 100  # Allow 100 units outside boundaries for detection
+
+        if (min_x - BUFFER_ZONE <= x <= max_x + BUFFER_ZONE and 
+            min_y - BUFFER_ZONE <= y <= max_y + BUFFER_ZONE and 
+            z_min <= z <= z_max):
+            
+            # FORCE clamp to actual boundaries (not buffer boundaries)
+            player_pos[0] = max(min_x, min(x, max_x))
+            player_pos[1] = max(min_y, min(y, max_y))  # This will now clamp 1375.1 → 1350.0
+            player_pos[2] = max(z_min, min(z, z_max))
+            
+            print(f"Clamped in Castle {i+1}")
             return
-
-    # Central rock platform
+    
+    # Central rock platform (circular boundary)
     rock_x, rock_y, rock_z = central_rock_pos
-    rock_radius = 220
-    rock_height = 1600 + 150
-    if rock_z <= z <= rock_z + rock_height:
-        player_pos[0] = max(rock_x - rock_radius, min(x, rock_x + rock_radius))
-        player_pos[1] = max(rock_y - rock_radius, min(y, rock_y + rock_radius))
-        return
-
-    # Perimeter guard tower area (approx)
-    min_x = min([c['position'][0] - c['size']/2 for c in castle_configs]) - 500
-    max_x = max([c['position'][0] + c['size']/2 for c in castle_configs]) + 500
-    min_y = min([c['position'][1] - c['size']/2 for c in castle_configs]) - 500
-    max_y = max([c['position'][1] + c['size']/2 for c in castle_configs]) + 500
-    if 0 <= z <= 600:
-        player_pos[0] = max(min_x, min(x, max_x))
-        player_pos[1] = max(min_y, min(y, max_y))
-        return
-
+    rock_radius = 120  # Platform radius
+    rock_height_min = rock_z + 1600
+    rock_height_max = rock_z + 1800
+    
+    if rock_height_min <= z <= rock_height_max:
+        dist_from_center = sqrt((x - rock_x)**2 + (y - rock_y)**2)
+        if dist_from_center <= rock_radius:
+            # Keep player within circular platform - no center forcing
+            if dist_from_center > rock_radius - 10:  # Near edge
+                direction_x = (x - rock_x) / max(dist_from_center, 0.1)  # Avoid division by zero
+                direction_y = (y - rock_y) / max(dist_from_center, 0.1)
+                player_pos[0] = rock_x + direction_x * (rock_radius - 10)
+                player_pos[1] = rock_y + direction_y * (rock_radius - 10)
+            return
+    
+    # Spiral stairs around rock tower
+    if rock_z <= z <= rock_z + 1600:
+        stair_radius = 220
+        dist_from_rock = sqrt((x - rock_x)**2 + (y - rock_y)**2)
+        if 180 <= dist_from_rock <= 260:  # On spiral stairs
+            return  # Allow movement on stairs
+    
+    # Perimeter wall area (ground level only)
+    buildings = [castle_configs[0], castle_configs[2], {'position': central_rock_pos, 'size': 800}]
+    min_x = min([pos['position'][0] - pos['size']/2 for pos in buildings]) - 500
+    max_x = max([pos['position'][0] + pos['size']/2 for pos in buildings]) + 500
+    min_y = min([pos['position'][1] - pos['size']/2 for pos in buildings]) - 500
+    max_y = max([pos['position'][1] + pos['size']/2 for pos in buildings]) + 500
+    
+    if 0 <= z <= 450:  # Ground level
+        if min_x <= x <= max_x and min_y <= y <= max_y:
+            # Player is in perimeter area - clamp to boundaries, don't move to center
+            if x < min_x: player_pos[0] = min_x
+            elif x > max_x: player_pos[0] = max_x
+            
+            if y < min_y: player_pos[1] = min_y
+            elif y > max_y: player_pos[1] = max_y
+            return
+    
+    # Only if completely outside all areas, find nearest castle and move to edge (not center)
+    min_dist = float('inf')
+    nearest_castle = None
+    
+    for castle in castle_configs:
+        cx, cy = castle['position'][0], castle['position'][1]
+        dist = sqrt((x - cx)**2 + (y - cy)**2)
+        if dist < min_dist:
+            min_dist = dist
+            nearest_castle = castle
+    
+    if nearest_castle:
+        # Move player to nearest EDGE of castle, not center
+        min_x, max_x, min_y, max_y, z_min, z_max = get_castle_boundaries(nearest_castle)
+        
+        # Find closest boundary point
+        clamp_x = max(min_x, min(x, max_x))
+        clamp_y = max(min_y, min(y, max_y))
+        
+        player_pos[0] = clamp_x
+        player_pos[1] = clamp_y
+        player_pos[2] = nearest_castle['position'][2] + nearest_castle['wall_height']
 
 def setup_camera():
     """Setup camera perspective"""
@@ -1054,7 +966,8 @@ def setup_camera():
     eye_y = cam_dist * cos(radians(cam_angle_v)) * sin(radians(cam_angle_h))
     eye_z = cam_dist * sin(radians(cam_angle_v))
     
-    gluLookAt(eye_x, eye_y, eye_z, -1000, 0, 600, 0, 0, 1)
+    gluLookAt(eye_x + player_pos[0], eye_y + player_pos[1], eye_z + player_pos[2],
+              player_pos[0], player_pos[1], player_pos[2], 0, 0, 1)
 
 def show_screen():
     """Main display function"""
@@ -1063,26 +976,23 @@ def show_screen():
     glViewport(0, 0, 1000, 800)
     setup_camera()
     
-    # Draw multi-colored grid floor with various green shades
     draw_multi_colored_grid()
-    
-    # Draw structures
     draw_all_structures()
     draw_mountain_range()
-    # Draw minimal vegetation (15 trees + 25 bushes)
     draw_minimal_vegetation()
     
     # Display info
-    draw_text(10, 770, f"Castle Complex with Perimeter Wall - {len(castle_configs)} Castles")
-    draw_text(10, 740, "Controls: Arrows=Rotate, Z/X=Zoom")
-    draw_text(10, 710, f"Camera Distance: {int(cam_dist)}")
-    draw_text(10, 680, "Perimeter wall excludes biggest castle")
+    draw_text(10, 770, f"Castle Complex - Fixed Clamping & Tower Navigation")
+    draw_text(10, 740, "Controls: Arrows=Rotate, Z/X=Zoom, WASD=Move")
+    draw_text(10, 710, "Teleport: 1/2/3=Castles, T=Tower Top, G=Ground")
+    draw_text(10, 680, f"Position: ({int(player_pos[0])}, {int(player_pos[1])}, {int(player_pos[2])})")
     
     glutSwapBuffers()
 
 def handle_special_keys(key, x, y):
     """Handle arrow keys"""
     global cam_angle_h, cam_angle_v
+    
     if key == GLUT_KEY_LEFT:
         cam_angle_h -= 5
     elif key == GLUT_KEY_RIGHT:
@@ -1091,25 +1001,27 @@ def handle_special_keys(key, x, y):
         cam_angle_v = min(89, cam_angle_v + 5)
     elif key == GLUT_KEY_DOWN:
         cam_angle_v = max(-10, cam_angle_v - 5)
+    
     glutPostRedisplay()
 
 def handle_keyboard(key, x, y):
-    """Keyboard input: camera, movement, rotation, teleport, with boundary clamping."""
-    global cam_dist, player_pos, player_angle, player_speed, player_turn_speed
+    """Keyboard input with FIXED clamping, tower navigation, and ground drop"""
+    global cam_dist, player_pos, player_angle, player_speed, player_turn_speed, teleport_skip_clamp
+    
     k = key.decode("utf-8").lower()
-
+    
     # Camera zoom
     if k == 'z':
         cam_dist = max(1000, cam_dist - 150)
     elif k == 'x':
         cam_dist = min(25000, cam_dist + 150)
-
+    
     # Player rotation
     elif k == 'a':
         player_angle += player_turn_speed
     elif k == 'd':
         player_angle -= player_turn_speed
-
+    
     # Move player forward/backward
     elif k == 'w':
         rad = radians(player_angle + 90)
@@ -1121,20 +1033,38 @@ def handle_keyboard(key, x, y):
         player_pos[0] -= player_speed * cos(rad)
         player_pos[1] -= player_speed * sin(rad)
         clamp_player_position()
-
-    # Teleport to castle roofs
+    
+    # Teleport to castle centers
     elif k in ['1', '2', '3']:
+        teleport_skip_clamp = True
         index = int(k) - 1
         castle = castle_configs[index]
-        player_pos[0] = castle['position'][0]
-        player_pos[1] = castle['position'][1]
-        player_pos[2] = castle['position'][2] + castle['roof_z'] + 75
-        clamp_player_position()
-
+        tx, ty, base_z = castle['position']
+        tz = base_z + castle['wall_height']
+        
+        player_pos[0] = float(tx)
+        player_pos[1] = float(ty)
+        player_pos[2] = float(tz)
+        print(f"Teleported to Castle {k} at ({player_pos[0]}, {player_pos[1]}, {player_pos[2]})")
+    
+    # NEW: Go to rock tower top (like initial position)
+    elif k == 't':
+        teleport_skip_clamp = True
+        player_pos[0] = central_rock_pos[0]
+        player_pos[1] = central_rock_pos[1] 
+        player_pos[2] = central_rock_pos[2] + 1630  # Same as initial position
+        print(f"Teleported to Tower Top at ({player_pos[0]}, {player_pos[1]}, {player_pos[2]})")
+    
+    # NEW: Drop to ground level at current X,Y position
+    elif k == 'g':
+        teleport_skip_clamp = True
+        # Keep X,Y the same, drop Z to ground level
+        ground_level = 50  # Slightly above ground
+        player_pos[2] = ground_level
+        print(f"Dropped to ground at ({player_pos[0]}, {player_pos[1]}, {player_pos[2]})")
+        clamp_player_position()  # Apply clamping to ensure valid ground position
+    
     glutPostRedisplay()
-
-
-
 
 def main():
     """Main function"""
@@ -1142,15 +1072,14 @@ def main():
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
     glutInitWindowSize(1000, 800)
     glutInitWindowPosition(0, 0)
-    glutCreateWindow(b"Castle Complex with Perimeter Wall")
+    glutCreateWindow(b"Castle Complex - Fixed Clamping & Tower Navigation")
     
     glEnable(GL_DEPTH_TEST)
-    # glDepthFunc(GL_LESS)
+    glDepthFunc(GL_LESS)
     
     glutDisplayFunc(show_screen)
     glutKeyboardFunc(handle_keyboard)
     glutSpecialFunc(handle_special_keys)
-    
     glutMainLoop()
 
 if __name__ == "__main__":
