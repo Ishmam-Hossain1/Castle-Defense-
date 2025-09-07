@@ -2,15 +2,42 @@ from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from math import sin, cos, atan2, radians, sqrt
+import time
 
 GRID_LENGTH = 500
-cam_angle_h = 45
-cam_angle_v = 30
-cam_dist = 8000  # Increased for better view of perimeter wall
+# cam_angle_h = 45
+# cam_angle_v = 30
+# cam_dist = 8000  # Increased for better view of perimeter wall
 fovY = 60
+
+# Initial camera settings
+camera_radius = 8000
+camera_height = 2500
+cam_angle_h = radians(45)  # horizontal angle
+min_radius = 500
+max_radius = 20000
+
+# Compute initial camera_pos based on angle and radius
+camera_pos = [
+    camera_radius * cos(cam_angle_h),  # X
+    camera_radius * sin(cam_angle_h),  # Y
+    camera_height                     # Z
+]
+
 
 fpp_mode = False  # False = default view, True = FPP
 
+import time
+
+player_coins = 0
+castle_health = 100   # initial health
+max_castle_health = 200
+
+last_chest_time = 0  # timestamp of last chest collection
+CHEST_COOLDOWN = 5   # seconds
+
+
+player_arrows = 0  # initial arrow count
 
 
 # Castle configurations
@@ -19,34 +46,40 @@ castle_configs = [
         'position': [-800, -1600, 0],
         'size': 1600,
         'height': 800,
-        'roof_z': 600,   # actual roof/platform height
+        'roof_z': 600,
         'tower_radius': 160,
         'floors': 7,
         'wall_thickness': 300,
         'wall_height': 600,
-        'color_scheme': 'reddish'
+        'color_scheme': 'reddish',
+        'chest': None
     },
     {
         'position': [900, 1000, 0],    # Biggest castle - EXCLUDED from wall
         'size': 1600,
         'height': 1200,
-        'roof_z': 800,   # actual roof height
+        'roof_z': 800,
         'tower_radius': 180,
         'floors': 12,
         'wall_thickness': 400,
         'wall_height': 800,
-        'color_scheme': 'reddish'
+        'color_scheme': 'reddish',
+        'chest': {
+            'position': [1200, 500, 0],   # near the east inner wall
+            'size': 100
+        }
     },
     {
         'position': [-3300, 400, 0],
         'size': 2000,
         'height': 600,
-        'roof_z': 450,   # actual roof height
+        'roof_z': 450,
         'tower_radius': 120,
         'floors': 3,
         'wall_thickness': 300,
         'wall_height': 450,
-        'color_scheme': 'reddish'
+        'color_scheme': 'reddish',
+        'chest': None
     }
 ]
 
@@ -662,6 +695,22 @@ def draw_wooden_circle_on_roof(castle, radius=120, thickness=20):
         draw_cube_manual_shading(px, py, roof_z + post_height/2, post_size, post_size, post_height, wood_color)
 
 
+def draw_castle_roof_rectangle(castle):
+    """Draw a flat rectangular roof on top of the castle."""
+    x, y, z = castle['position']
+    half = castle['size'] / 2
+    roof_z = z + castle['roof_z']  # use roof_z height from config
+
+    glColor3f(0.7, 0.7, 0.7)  # light grey roof
+    glBegin(GL_QUADS)
+    glVertex3f(x - half, y - half, roof_z)
+    glVertex3f(x + half, y - half, roof_z)
+    glVertex3f(x + half, y + half, roof_z)
+    glVertex3f(x - half, y + half, roof_z)
+    glEnd()
+
+
+
 def draw_single_castle(config):
     """Draw individual castle with hollow interior"""
     pos = config['position']
@@ -783,32 +832,110 @@ def draw_single_castle(config):
     draw_cube_manual_shading(pos[0], pos[1] - half + wall_inset, pos[2] + wall_height/2,
                             300, 80, wall_height, gate_color)
     
+
+    # Draw flat rectangular roof
+    draw_castle_roof_rectangle(config)
+
+    
     # Draw wooden circle on roof
     draw_wooden_circle_on_roof(config, radius=120, thickness=20)
 
 
+def draw_wooden_logs_on_largest_castle():
+    """Place horizontal wooden logs at fixed coordinates on the largest castle roof."""
+    # Fixed position
+    x, y, z = 1200, 1500, 0
+    
+    quad = gluNewQuadric()
+    log_radius = 40   # thick logs
+    log_length = 320  # long logs
+    num_logs = 5
+    spacing = 5  # spacing between logs vertically
 
+    for i in range(num_logs):
+        glPushMatrix()
+        # Move to base position
+        glTranslatef(x, y, z + i*(log_radius*2 + spacing))
+        # Rotate cylinder to lay horizontally along X-axis
+        glRotatef(90, 0, 1, 0)
+        glColor3f(0.55, 0.27, 0.07)  # brown wood
+        gluCylinder(quad, log_radius, log_radius, log_length, 16, 16)
+        glPopMatrix()
+
+
+def draw_chest(x, y, z, size=250):
+    """Draw a simple treasure chest near the castle wall."""
+    # Chest base (brown box)
+    chest_color = [0.55, 0.27, 0.07]  # wooden brown
+    draw_cube_manual_shading(x, y, z + size/4, size, size*0.6, size/2, chest_color)
+
+    # Chest lid (slightly curved top)
+    lid_color = [0.45, 0.2, 0.05]
+    draw_cube_manual_shading(x, y, z + size*0.75, size, size*0.6, size/3, lid_color)
+
+    # Golden lock plate
+    lock_color = [1.0, 0.84, 0.0]  # gold
+    draw_cube_manual_shading(x, y + size*0.3, z + size*0.5, size*0.2, size*0.05, size*0.2, lock_color)
+
+
+def draw_circle_flat(x, y, z, radius, color=[0.55, 0.27, 0.07], segments=64):
+    """Draw a flat circle at (x, y, z) with specified color."""
+    glColor3f(*color)
+    glBegin(GL_TRIANGLE_FAN)
+    glVertex3f(x, y, z)
+    for i in range(segments + 1):
+        angle = 2 * 3.14159 * i / segments
+        dx = radius * cos(angle)
+        dy = radius * sin(angle)
+        glVertex3f(x + dx, y + dy, z)
+    glEnd()
 
 
 def draw_all_structures():
-    """Draw complete castle complex"""
+    """Draw complete castle complex with chests, logs, and teleport circles."""
+    TELEPORT_RADIUS = 120
+    WOOD_THICKNESS = 20
+
     # Individual castles
     for config in castle_configs:
         draw_single_castle(config)
-    
+
+        # 🔹 Draw chest if this castle has one
+        if config.get('chest'):
+            chest = config['chest']
+            draw_chest(chest['position'][0],
+                       chest['position'][1],
+                       chest['position'][2])
+
+        # 🔹 Draw teleport circle at roof (wooden circle)
+        cx, cy, cz = config['position']
+        roof_z = cz + config['roof_z']
+        draw_circle_flat(cx, cy, roof_z + 15, TELEPORT_RADIUS, color=[0.55, 0.27, 0.07])
+
+
+        # 🔹 Draw teleport circle at bottom of castle
+        draw_circle_flat(cx, cy, cz + 2, TELEPORT_RADIUS, color=[1.0, 1.0, 1.0])  # white
+
+    # Wooden logs on largest castle
+    draw_wooden_logs_on_largest_castle()
+
     # Central rock tower with platform
     draw_rock_tower()
     draw_rock_tower_platform()
     draw_spiral_stairs_around_rock()
-    
+
     # Rope connections
     draw_rope_connections()
-    
-    # PERIMETER WALL - encapsulates everything except biggest castle
+
+    # Perimeter wall (excludes largest castle)
     draw_perimeter_wall()
 
+    # Draw player if not in FPP
     if not fpp_mode:
-      draw_human(player_pos[0], player_pos[1], player_pos[2], scale=60)
+        draw_human(player_pos[0], player_pos[1], player_pos[2], scale=60)
+
+
+
 
 def draw_text(x, y, text, font=GLUT_BITMAP_HELVETICA_18):
     """Draw text on screen"""
@@ -829,6 +956,32 @@ def draw_text(x, y, text, font=GLUT_BITMAP_HELVETICA_18):
     glMatrixMode(GL_PROJECTION)
     glPopMatrix()
     glMatrixMode(GL_MODELVIEW)
+
+def is_player_on_chest(player_pos, chest):
+    px, py, pz = player_pos
+    cx, cy, cz = 1200,500,0
+    distance_threshold = chest['size'] / 2 + 20
+
+    dx = abs(px - cx)
+    dy = abs(py - cy)
+    dz = abs(pz - cz)
+
+    return dx <= distance_threshold and dy <= distance_threshold and dz <= distance_threshold
+
+def is_player_on_wooden_logs(player_pos):
+    """Check if player is close enough to the wooden logs to collect arrows."""
+    px, py, pz = player_pos
+    log_x, log_y, log_z = 1200, 1500, 0
+    distance_threshold = 200  # allowable distance to pick up logs
+
+    dx = px - log_x
+    dy = py - log_y
+    dz = pz - log_z
+
+    distance = (dx**2 + dy**2 + dz**2)**0.5
+    return distance <= distance_threshold
+
+
 
 def clamp_player_position():
     """Clamp player inside allowed zones so he cannot cross boundaries."""
@@ -872,6 +1025,22 @@ def clamp_player_position():
         player_pos[0] = max(min_x, min(x, max_x))
         player_pos[1] = max(min_y, min(y, max_y))
         return
+    
+
+def heal_castle():
+    global player_coins, castle_health, max_castle_health
+
+    COST = 50
+    HEAL_AMOUNT = 20
+
+    if player_coins >= COST and castle_health < max_castle_health:
+        player_coins -= COST
+        castle_health = min(max_castle_health, castle_health + HEAL_AMOUNT)
+        print(f"Castle healed by {HEAL_AMOUNT}! Health = {castle_health}, Coins left = {player_coins}")
+    else:
+        print("Not enough coins or castle already at max health.")
+
+    
 
 
 def setup_camera():
@@ -890,19 +1059,19 @@ def setup_camera():
     if fpp_mode:
         # Place camera slightly above player so you're not inside the model
         eye_x, eye_y, eye_z = player_pos
-        eye_z += 90  # adjust based on player model height
+        eye_z += 120  # adjust based on player model height
         rad = radians(player_angle + 90)
-        look_x = eye_x + cos(rad) * 5  # look a bit forward
+        look_x = eye_x + cos(rad) * 5 # look a bit forward
         look_y = eye_y + sin(rad) * 5
         look_z = eye_z
         gluLookAt(eye_x, eye_y, eye_z, look_x, look_y, look_z, 0, 0, 1)
 
     else:
-        # Default orbiting camera
-        eye_x = cam_dist * cos(radians(cam_angle_v)) * cos(radians(cam_angle_h))
-        eye_y = cam_dist * cos(radians(cam_angle_v)) * sin(radians(cam_angle_h))
-        eye_z = cam_dist * sin(radians(cam_angle_v))
-        gluLookAt(eye_x, eye_y, eye_z, -1000, 0, 600, 0, 0, 1)
+        # Orbiting camera around player/scene center using camera_pos
+        eye_x, eye_y, eye_z = camera_pos
+        center_x, center_y, center_z = -1000, 0, 600  # target point
+        gluLookAt(eye_x, eye_y, eye_z, center_x, center_y, center_z, 0, 0, 1)
+
 
 
 
@@ -921,24 +1090,37 @@ def show_screen():
     # Draw minimal vegetation (15 trees + 25 bushes)
     
     # Display info
-    draw_text(10, 770, f"Castle Complex with Perimeter Wall - {len(castle_configs)} Castles")
-    draw_text(10, 740, "Controls: Arrows=Rotate, Z/X=Zoom")
-    draw_text(10, 710, f"Camera Distance: {int(cam_dist)}")
-    draw_text(10, 680, "Perimeter wall excludes biggest castle")
+    draw_text(10, 770, f"Coins: {player_coins}", GLUT_BITMAP_HELVETICA_18)
+    draw_text(10, 740, f"Arrows: {player_arrows}", GLUT_BITMAP_HELVETICA_18)
+    draw_text(10, 710, f"Castle Health: {castle_health}", GLUT_BITMAP_HELVETICA_18)
+
+    # draw_text(10, 770, f"Castle Complex with Perimeter Wall - {len(castle_configs)} Castles")
+    # draw_text(10, 740, "Controls: Arrows=Rotate, Z/X=Zoom")
+    # draw_text(10, 710, f"Camera Distance: {int(cam_dist)}")
+    # draw_text(10, 680, "Perimeter wall excludes biggest castle")
     
     glutSwapBuffers()
 
 def handle_special_keys(key, x, y):
-    """Handle arrow keys"""
-    global cam_angle_h, cam_angle_v
+    global cam_angle_h, camera_radius, camera_height, camera_pos
+
+    angle_step = radians(2)
+    height_step = 100
+
     if key == GLUT_KEY_LEFT:
-        cam_angle_h -= 5
+        cam_angle_h += angle_step
     elif key == GLUT_KEY_RIGHT:
-        cam_angle_h += 5
+        cam_angle_h -= angle_step
     elif key == GLUT_KEY_UP:
-        cam_angle_v = min(89, cam_angle_v + 5)
+        camera_height += height_step
     elif key == GLUT_KEY_DOWN:
-        cam_angle_v = max(-10, cam_angle_v - 5)
+        camera_height = max(0, camera_height - height_step)  # clamp at ground level
+
+    # Update camera position
+    camera_pos[0] = camera_radius * cos(cam_angle_h)
+    camera_pos[1] = camera_radius * sin(cam_angle_h)
+    camera_pos[2] = camera_height
+
     glutPostRedisplay()
 
 
@@ -958,17 +1140,24 @@ def handle_mouse_button(button, state, x, y):
 
 def handle_keyboard(key, x, y):
     """Keyboard input: camera, movement, rotation, teleport, with boundary clamping."""
-    global cam_dist, player_pos, player_angle, player_speed, player_turn_speed
+    global cam_dist, player_pos, player_angle, player_speed, player_turn_speed, player_coins, last_chest_time, player_arrows, camera_radius, min_radius, max_radius 
     k = key.decode("utf-8").lower()
+    zoom_step = 200
 
     # Camera zoom
     if k == 'z':
-        cam_dist = max(1000, cam_dist - 150)
+        camera_radius = max(min_radius, camera_radius - zoom_step)
     elif k == 'x':
-        cam_dist = min(25000, cam_dist + 150)
+        camera_radius = min(max_radius, camera_radius + zoom_step)
+
+    camera_pos[0] = camera_radius * cos(cam_angle_h)
+    camera_pos[1] = camera_radius * sin(cam_angle_h)
+
+    
+    glutPostRedisplay()
 
     # Player rotation
-    elif k == 'a':
+    if k == 'a':
         player_angle += player_turn_speed
     elif k == 'd':
         player_angle -= player_turn_speed
@@ -986,6 +1175,23 @@ def handle_keyboard(key, x, y):
             player_pos[0] -= player_speed * cos(rad)
             player_pos[1] -= player_speed * sin(rad)
             clamp_player_position()
+    elif k == 'f':
+        print(player_pos)
+        current_time = time.time()
+        if current_time - last_chest_time >= CHEST_COOLDOWN:
+            for config in castle_configs:
+                chest = config.get('chest')
+                if chest and is_player_on_chest(player_pos, chest):
+                    player_coins += 100
+                    last_chest_time = current_time
+                    print(f"Collected 100 coins! Total coins: {player_coins}")
+                    break
+        else:
+            print("Chest is recharging... wait a few seconds.")
+
+        if is_player_on_wooden_logs(player_pos):
+            player_arrows += 100
+            print(f"Collected arrows! Total: {player_arrows}")
 
     # Teleport to castle roofs
     elif k in ['1', '2', '3']:
@@ -1022,26 +1228,38 @@ def handle_keyboard(key, x, y):
                 print(f"Player teleported to spawn from center of castle at {castle['position']}")
                 break  # stop after teleporting
 
-    elif k == 'e':  # teleport down from roof if standing on wooden circle
+    elif k == 'e':  # teleport up or down
         TELEPORT_RADIUS = 120  # wooden circle radius
         WOOD_THICKNESS = 20    # thickness of the wooden circle
 
         for castle in castle_configs:
             cx, cy, cz = castle['position']
-            roof_z = cz + castle['roof_z'] + WOOD_THICKNESS / 2  # match drawing
-            
+            roof_z = cz + castle['roof_z']  # top of roof/platform
+
             dx = player_pos[0] - cx
             dy = player_pos[1] - cy
             distance = (dx**2 + dy**2)**0.5
 
-            # If player is on the wooden circle (above or at platform)
+            # --- Teleport down from roof ---
             if distance <= TELEPORT_RADIUS and player_pos[2] >= roof_z:
-                # Teleport to bottom of castle
                 player_pos[0] = cx
                 player_pos[1] = cy
                 player_pos[2] = cz + 50  # slightly above ground
                 print(f"Player teleported down from roof of castle at {castle['position']}")
                 break
+
+            # --- Teleport up from ground ---
+            elif distance <= TELEPORT_RADIUS and abs(player_pos[2] - (cz + 50)) < 100:
+                player_pos[0] = cx
+                player_pos[1] = cy
+                player_pos[2] = roof_z + WOOD_THICKNESS / 2
+                print(f"Player teleported up to roof of castle at {castle['position']}")
+                break
+
+    elif k == 'h':
+        heal_castle()
+
+
 
 
 
