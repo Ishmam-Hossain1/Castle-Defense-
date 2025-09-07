@@ -1452,6 +1452,7 @@ def clamp_player_position():
         player_pos[1] = clamp_y
         player_pos[2] = nearest_castle['position'][2] + nearest_castle['wall_height']
 
+
 def heal_castle():
     global player_coins, castle_health, max_castle_health
     COST = 50
@@ -1462,6 +1463,55 @@ def heal_castle():
         print(f"Castle healed by {HEAL_AMOUNT}! Health = {castle_health}, Coins left = {player_coins}")
     else:
         print("Not enough coins or castle already at max health.")
+
+
+def restart_game():
+    global pause, show_trails, wireframe, enemies, projectiles, effects
+    global wall_hp, wall_max, all_walls
+    global player_coins, castle_health, max_castle_health, player_arrows
+    global last_chest_time, teleport_skip_clamp
+    global camera_radius, camera_height, cam_angle_h, cam_angle_v, fpp_mode
+    global spawn_flags, spawn_timers
+    global player_pos, player_speed, player_angle, player_turn_speed
+
+    # Reset game state
+    pause = False
+    show_trails = False
+    wireframe = False
+    enemies = []
+    projectiles = []
+    effects = []
+    wall_hp = {}
+    wall_max = {}
+    all_walls = []
+
+    # Reset player stats
+    player_coins = 0
+    castle_health = 100
+    max_castle_health = 200
+    player_arrows = 0
+    last_chest_time = 0
+    teleport_skip_clamp = False
+
+    # Reset camera
+    cam_angle_h = 45
+    cam_angle_v = 30
+    camera_radius = 8000
+    camera_height = 2500
+    fpp_mode = False
+    update_camera_pos()  # make sure camera_pos matches
+
+    # Reset enemy spawning
+    spawn_flags = {'barbarian': True, 'archer': True, 'giant': True, 'cannon': True}
+    spawn_timers = {'barbarian': 0.0, 'archer': 0.0, 'giant': 0.0, 'cannon': 0.0}
+
+    # Reset player position
+    player_pos = [central_rock_pos[0], central_rock_pos[1], central_rock_pos[2] + 1630]
+    player_speed = 50
+    player_angle = 0
+    player_turn_speed = 5
+
+    print("Game restarted!")
 
 def setup_camera():
     glMatrixMode(GL_PROJECTION)
@@ -1621,6 +1671,9 @@ def handle_keyboard(key, x, y):
         player_angle += player_turn_speed
     elif k == 'd':
         player_angle -= player_turn_speed
+
+    elif k == 'r':
+        restart_game()
         
     
     # Move player forward/backward
