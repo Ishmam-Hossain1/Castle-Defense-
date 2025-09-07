@@ -6,6 +6,9 @@ import random
 import time
 import sys
 
+#surrender feature
+surrender = False
+
 # Global variables
 GRID_LENGTH = 500
 cam_angle_h = 45
@@ -626,19 +629,19 @@ def spawn_enemy(kind):
 def update_spawning(dt):
     spawn_timers['barbarian'] -= dt
     if spawn_flags['barbarian'] and spawn_timers['barbarian'] <= 0:
-        spawn_timers['barbarian'] = random.uniform(1.0, 2.5)
+        spawn_timers['barbarian'] = random.uniform(3.0, 5.5)
         enemies.append(Barbarian(rand_spawn_pos()))
     spawn_timers['archer'] -= dt
     if spawn_flags['archer'] and spawn_timers['archer'] <= 0:
-        spawn_timers['archer'] = random.uniform(2.2, 3.5)
+        spawn_timers['archer'] = random.uniform(4.2, 5.5)
         enemies.append(Archer(rand_spawn_pos()))
     spawn_timers['giant'] -= dt
     if spawn_flags['giant'] and spawn_timers['giant'] <= 0:
-        spawn_timers['giant'] = random.uniform(4.0, 7.0)
+        spawn_timers['giant'] = random.uniform(5.0, 8.0)
         enemies.append(Giant(rand_spawn_pos()))
     spawn_timers['cannon'] -= dt
     if spawn_flags['cannon'] and spawn_timers['cannon'] <= 0:
-        spawn_timers['cannon'] = random.uniform(5.0, 8.0)
+        spawn_timers['cannon'] = random.uniform(6.0, 9.0)
         enemies.append(Cannon(rand_spawn_pos()))
 
 # Wall system initialization
@@ -1452,6 +1455,7 @@ def clamp_player_position():
         player_pos[1] = clamp_y
         player_pos[2] = nearest_castle['position'][2] + nearest_castle['wall_height']
 
+
 def heal_castle():
     global player_coins, castle_health, max_castle_health
     COST = 50
@@ -1462,6 +1466,55 @@ def heal_castle():
         print(f"Castle healed by {HEAL_AMOUNT}! Health = {castle_health}, Coins left = {player_coins}")
     else:
         print("Not enough coins or castle already at max health.")
+
+
+def restart_game():
+    global pause, show_trails, wireframe, enemies, projectiles, effects
+    global wall_hp, wall_max, all_walls
+    global player_coins, castle_health, max_castle_health, player_arrows
+    global last_chest_time, teleport_skip_clamp
+    global camera_radius, camera_height, cam_angle_h, cam_angle_v, fpp_mode
+    global spawn_flags, spawn_timers
+    global player_pos, player_speed, player_angle, player_turn_speed
+
+    # Reset game state
+    pause = False
+    show_trails = False
+    wireframe = False
+    enemies = []
+    projectiles = []
+    effects = []
+    wall_hp = {}
+    wall_max = {}
+    all_walls = []
+
+    # Reset player stats
+    player_coins = 0
+    castle_health = 100
+    max_castle_health = 200
+    player_arrows = 0
+    last_chest_time = 0
+    teleport_skip_clamp = False
+
+    # Reset camera
+    cam_angle_h = 45
+    cam_angle_v = 30
+    camera_radius = 8000
+    camera_height = 2500
+    fpp_mode = False
+    update_camera_pos()  # make sure camera_pos matches
+
+    # Reset enemy spawning
+    spawn_flags = {'barbarian': True, 'archer': True, 'giant': True, 'cannon': True}
+    spawn_timers = {'barbarian': 0.0, 'archer': 0.0, 'giant': 0.0, 'cannon': 0.0}
+
+    # Reset player position
+    player_pos = [central_rock_pos[0], central_rock_pos[1], central_rock_pos[2] + 1630]
+    player_speed = 50
+    player_angle = 0
+    player_turn_speed = 5
+
+    print("Game restarted!")
 
 def setup_camera():
     glMatrixMode(GL_PROJECTION)
@@ -1567,6 +1620,12 @@ def show_screen():
     
     glutSwapBuffers()
 
+def update_camera_pos():
+    global camera_pos, camera_radius, cam_angle_h, camera_height
+    camera_pos[0] = camera_radius * cos(cam_angle_h)
+    camera_pos[1] = camera_radius * sin(cam_angle_h)
+    camera_pos[2] = camera_height
+
 def handle_special_keys(key, x, y):
     global cam_angle_h, camera_radius, camera_height, camera_pos
     
@@ -1581,21 +1640,25 @@ def handle_special_keys(key, x, y):
         camera_height += height_step
     elif key == GLUT_KEY_DOWN:
         camera_height = max(0, camera_height - height_step)
+
+    update_camera_pos()
     
-    camera_pos[0] = camera_radius * cos(cam_angle_h)
-    camera_pos[1] = camera_radius * sin(cam_angle_h)
-    camera_pos[2] = camera_height
     
     glutPostRedisplay()
 
+update_camera_pos()
+
+
 def handle_mouse_button(button, state, x, y):
-    global fpp_mode
+    global fpp_mode,surrender
+    if surrender == True:
+        return
     if button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN:
         fpp_mode = not fpp_mode
         print("FPP mode activated" if fpp_mode else "FPP mode deactivated")
 
 def handle_keyboard(key, x, y):
-    global cam_dist, player_pos, player_angle, player_speed, player_turn_speed, player_coins, last_chest_time, player_arrows, camera_radius, min_radius, max_radius, pause, show_trails, wireframe, teleport_skip_clamp
+    global cam_dist, player_pos, player_angle, player_speed, player_turn_speed, player_coins, last_chest_time, player_arrows, camera_radius, min_radius, max_radius, pause, show_trails, wireframe, teleport_skip_clamp, surrender
     
     k = key.decode("utf-8").lower()
     zoom_step = 200
@@ -1606,14 +1669,26 @@ def handle_keyboard(key, x, y):
     elif k == 'x':
         camera_radius = min(max_radius, camera_radius + zoom_step)
     
-    camera_pos[0] = camera_radius * cos(radians(cam_angle_h))
-    camera_pos[1] = camera_radius * sin(radians(cam_angle_h))
+    update_camera_pos()
+
+    if k == 'r':
+        surrender = False
+        restart_game()
+
+    if surrender == True:
+        return
     
     # Player rotation
     if k == 'a':
         player_angle += player_turn_speed
     elif k == 'd':
         player_angle -= player_turn_speed
+
+
+
+    elif k == '0':
+        surrender = True
+        
     
     # Move player forward/backward
     elif k == 'w':
@@ -1741,15 +1816,7 @@ def main():
     glutCreateWindow(b"Castle Defense - Complete Game")
     
     glEnable(GL_DEPTH_TEST)
-    # glDepthFunc(GL_LESS)
-    
-    # Enable lighting for enemies only
-    # glEnable(GL_LIGHTING)
-    # glEnable(GL_LIGHT0)
-    # glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
-    # glLightfv(GL_LIGHT0, GL_SPECULAR, (1.0, 1.0, 1.0, 1.0))
-    # glEnable(GL_COLOR_MATERIAL)
-    # glColorMaterial(GL_FRONT, GL_DIFFUSE)
+
     
     # Initialize game state
     for i in range(len(castle_configs)):
