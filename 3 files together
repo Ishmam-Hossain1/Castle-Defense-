@@ -626,19 +626,19 @@ def spawn_enemy(kind):
 def update_spawning(dt):
     spawn_timers['barbarian'] -= dt
     if spawn_flags['barbarian'] and spawn_timers['barbarian'] <= 0:
-        spawn_timers['barbarian'] = random.uniform(1.0, 2.5)
+        spawn_timers['barbarian'] = random.uniform(3.0, 5.5)
         enemies.append(Barbarian(rand_spawn_pos()))
     spawn_timers['archer'] -= dt
     if spawn_flags['archer'] and spawn_timers['archer'] <= 0:
-        spawn_timers['archer'] = random.uniform(2.2, 3.5)
+        spawn_timers['archer'] = random.uniform(4.2, 5.5)
         enemies.append(Archer(rand_spawn_pos()))
     spawn_timers['giant'] -= dt
     if spawn_flags['giant'] and spawn_timers['giant'] <= 0:
-        spawn_timers['giant'] = random.uniform(4.0, 7.0)
+        spawn_timers['giant'] = random.uniform(5.0, 8.0)
         enemies.append(Giant(rand_spawn_pos()))
     spawn_timers['cannon'] -= dt
     if spawn_flags['cannon'] and spawn_timers['cannon'] <= 0:
-        spawn_timers['cannon'] = random.uniform(5.0, 8.0)
+        spawn_timers['cannon'] = random.uniform(6.0, 9.0)
         enemies.append(Cannon(rand_spawn_pos()))
 
 # Wall system initialization
