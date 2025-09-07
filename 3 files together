@@ -1031,6 +1031,21 @@ def draw_wooden_logs_on_largest_castle():
         gluCylinder(quad, log_radius, log_radius, log_length, 16, 16)
         glPopMatrix()
 
+def draw_castle_roof_rectangle(castle):
+    """Draw a flat rectangular roof on top of the castle."""
+    x, y, z = castle['position']
+    half = castle['size'] / 2
+    roof_z = z + castle['roof_z']  # use roof_z height from config
+
+    glColor3f(0.7, 0.7, 0.7)  # light grey roof
+    glBegin(GL_QUADS)
+    glVertex3f(x - half, y - half, roof_z)
+    glVertex3f(x + half, y - half, roof_z)
+    glVertex3f(x + half, y + half, roof_z)
+    glVertex3f(x - half, y + half, roof_z)
+    glEnd()
+
+
 def draw_single_castle(config):
     pos = config['position']
     size = config['size']
@@ -1110,6 +1125,8 @@ def draw_single_castle(config):
     gate_color = get_color_scheme(color_scheme, gate_base)
     draw_cube_manual_shading(pos[0], pos[1] - half_size + wall_inset, pos[2] + wall_height/2,
                             300, 80, wall_height, gate_color)
+    
+    draw_castle_roof_rectangle(config)
 
 # Vegetation and environment (from paste.txt)
 def draw_simple_tree(x, y, z, size=100):
@@ -1550,6 +1567,12 @@ def show_screen():
     
     glutSwapBuffers()
 
+def update_camera_pos():
+    global camera_pos, camera_radius, cam_angle_h, camera_height
+    camera_pos[0] = camera_radius * cos(cam_angle_h)
+    camera_pos[1] = camera_radius * sin(cam_angle_h)
+    camera_pos[2] = camera_height
+
 def handle_special_keys(key, x, y):
     global cam_angle_h, camera_radius, camera_height, camera_pos
     
@@ -1557,19 +1580,21 @@ def handle_special_keys(key, x, y):
     height_step = 100
     
     if key == GLUT_KEY_LEFT:
-        cam_angle_h += angle_step
-    elif key == GLUT_KEY_RIGHT:
         cam_angle_h -= angle_step
+    elif key == GLUT_KEY_RIGHT:
+        cam_angle_h += angle_step
     elif key == GLUT_KEY_UP:
         camera_height += height_step
     elif key == GLUT_KEY_DOWN:
         camera_height = max(0, camera_height - height_step)
+
+    update_camera_pos()
     
-    camera_pos[0] = camera_radius * cos(cam_angle_h)
-    camera_pos[1] = camera_radius * sin(cam_angle_h)
-    camera_pos[2] = camera_height
     
     glutPostRedisplay()
+
+update_camera_pos()
+
 
 def handle_mouse_button(button, state, x, y):
     global fpp_mode
@@ -1589,14 +1614,14 @@ def handle_keyboard(key, x, y):
     elif k == 'x':
         camera_radius = min(max_radius, camera_radius + zoom_step)
     
-    camera_pos[0] = camera_radius * cos(radians(cam_angle_h))
-    camera_pos[1] = camera_radius * sin(radians(cam_angle_h))
+    update_camera_pos()
     
     # Player rotation
     if k == 'a':
         player_angle += player_turn_speed
     elif k == 'd':
         player_angle -= player_turn_speed
+        
     
     # Move player forward/backward
     elif k == 'w':
@@ -1724,15 +1749,15 @@ def main():
     glutCreateWindow(b"Castle Defense - Complete Game")
     
     glEnable(GL_DEPTH_TEST)
-    glDepthFunc(GL_LESS)
+    # glDepthFunc(GL_LESS)
     
-    # Enable lighting for enemies only
-    glEnable(GL_LIGHTING)
-    glEnable(GL_LIGHT0)
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
-    glLightfv(GL_LIGHT0, GL_SPECULAR, (1.0, 1.0, 1.0, 1.0))
-    glEnable(GL_COLOR_MATERIAL)
-    glColorMaterial(GL_FRONT, GL_DIFFUSE)
+    # # Enable lighting for enemies only
+    # glEnable(GL_LIGHTING)
+    # glEnable(GL_LIGHT0)
+    # glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
+    # glLightfv(GL_LIGHT0, GL_SPECULAR, (1.0, 1.0, 1.0, 1.0))
+    # glEnable(GL_COLOR_MATERIAL)
+    # glColorMaterial(GL_FRONT, GL_DIFFUSE)
     
     # Initialize game state
     for i in range(len(castle_configs)):
