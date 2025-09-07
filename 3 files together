@@ -26,6 +26,7 @@ effects = []
 wall_hp = {}
 wall_max = {}
 all_walls = []
+player_arrows_fired = []
 
 # Player and game variables
 player_coins = 0
@@ -105,6 +106,123 @@ player_pos = [central_rock_pos[0], central_rock_pos[1], central_rock_pos[2] + 16
 player_speed = 50
 player_angle = 0
 player_turn_speed = 5
+class PlayerArrow:
+    def __init__(self, start_pos, target_pos, damage=50):
+        self.start_pos = start_pos[:]
+        self.target_pos = target_pos[:]
+        self.current_pos = start_pos[:]
+        self.t = 0.0
+        self.speed = 1.5  # Slower speed for visibility
+        self.damage = damage
+        self.explosion_radius = 200.0
+        self.life = 4.0  # Longer flight time
+        self.active = True
+        
+        # Calculate better Bezier control points
+        distance = sqrt((target_pos[0] - start_pos[0])**2 + (target_pos[1] - start_pos[1])**2)
+        
+        # Control point (arc peak)
+        mid_x = (start_pos[0] + target_pos[0]) / 2
+        mid_y = (start_pos[1] + target_pos[1]) / 2
+        arc_height = 300 + distance * 0.4  # Higher arc for longer distances
+        mid_z = max(start_pos[2], target_pos[2]) + arc_height
+        
+        # Bezier control points: start -> high arc -> target
+        self.control_points = [
+            start_pos[:],
+            [mid_x, mid_y, mid_z],
+            target_pos[:]
+        ]
+
+    def bezier_point(self, t, points):
+        """Calculate point on quadratic Bezier curve"""
+        if len(points) != 3:
+            return points[0]
+        
+        t1 = 1 - t
+        t_squared = t * t
+        t1_squared = t1 * t1
+        
+        return [
+            t1_squared * points[0][0] + 2 * t1 * t * points[1][0] + t_squared * points[2][0],
+            t1_squared * points[0][1] + 2 * t1 * t * points[1][1] + t_squared * points[2][1],
+            t1_squared * points[0][2] + 2 * t1 * t * points[1][2] + t_squared * points[2][2]
+        ]
+
+    def update(self, dt):
+        if not self.active:
+            return
+            
+        self.life -= dt
+        self.t += self.speed * dt
+        
+        if self.t >= 1.0 or self.life <= 0:
+            # Arrow reached target or timed out
+            self.explode()
+            self.active = False
+        else:
+            # Update position along Bezier curve
+            self.current_pos = self.bezier_point(self.t, self.control_points)
+    
+    def explode(self):
+        """Create explosion effect and damage enemies in radius"""
+        explosion_pos = self.current_pos[:]
+        
+        # Create explosion particle effect
+        effects.append(ParticleBurst(explosion_pos, size=80, count=60))
+        
+        # Damage all enemies within explosion radius
+        enemies_hit = 0
+        for enemy in enemies[:]:  # Create copy to safely modify during iteration
+            dx = enemy.pos[0] - explosion_pos[0]
+            dy = enemy.pos[1] - explosion_pos[1]
+            dz = enemy.pos[2] - explosion_pos[2]
+            distance = sqrt(dx*dx + dy*dy + dz*dz)
+            
+            if distance <= self.explosion_radius:
+                # Calculate damage falloff (more damage at center)
+                damage_multiplier = max(0.3, 1.0 - (distance / self.explosion_radius))
+                actual_damage = int(self.damage * damage_multiplier)
+                
+                enemy.hp -= actual_damage
+                enemies_hit += 1
+                
+                # Create hit effect on enemy
+                effects.append(ParticleBurst([enemy.pos[0], enemy.pos[1], enemy.pos[2] + 50], size=30, count=20))
+        
+        print(f"Arrow exploded! Hit {enemies_hit} enemies")
+    
+    def draw(self):
+        if not self.active:
+            return
+        
+        # Draw the full bezier curve trajectory as a line
+        draw_bezier_curve_line(self.control_points, segments=50)
+        
+        # Draw current arrow position
+        glPushMatrix()
+        glTranslatef(self.current_pos[0], self.current_pos[1], self.current_pos[2])
+        
+        # Bright yellow arrow marker
+        glColor3f(1.0, 1.0, 0.0)
+        glPointSize(15.0)
+        glBegin(GL_POINTS)
+        glVertex3f(0, 0, 0)
+        glEnd()
+        
+        # Arrow cross shape
+        glColor3f(0.0, 1.0, 0.0)  # Green cross
+        glLineWidth(5.0)
+        glBegin(GL_LINES)
+        glVertex3f(-15, 0, 0)
+        glVertex3f(15, 0, 0)
+        glVertex3f(0, -15, 0)
+        glVertex3f(0, 15, 0)
+        glVertex3f(0, 0, -15)
+        glVertex3f(0, 0, 15)
+        glEnd()
+        
+        glPopMatrix()
 
 # Wall collision detection
 class Wall:
@@ -151,6 +269,134 @@ def get_camera_eye():
     cz = sin(ph)*cam_dist
     target = [castle_configs[0]['position'][0], castle_configs[0]['position'][1], castle_configs[0]['wall_height']]
     return [cx+target[0], cy+target[1], cz+target[2]]
+def bezier_point_static(t, points):
+    """Static version of bezier calculation for drawing curve"""
+    if len(points) != 3:
+        return points[0]
+    
+    t1 = 1 - t
+    t_squared = t * t
+    t1_squared = t1 * t1
+    
+    return [
+        t1_squared * points[0][0] + 2 * t1 * t * points[1][0] + t_squared * points[2][0],
+        t1_squared * points[0][1] + 2 * t1 * t * points[1][1] + t_squared * points[2][1],
+        t1_squared * points[0][2] + 2 * t1 * t * points[1][2] + t_squared * points[2][2]
+    ]
+
+def draw_bezier_curve_line(control_points, segments=50):
+    """Draw a line showing the bezier curve trajectory"""
+    glColor3f(1.0, 0.0, 0.0)  # Red line for visibility
+    glLineWidth(3.0)
+    
+    glBegin(GL_LINE_STRIP)
+    for i in range(segments + 1):
+        t = i / segments
+        point = bezier_point_static(t, control_points)
+        glVertex3f(point[0], point[1], point[2])
+    glEnd()
+
+def draw_light_bow():
+    """Draws a light bow"""
+    global player_pos, player_angle
+    
+    glPushMatrix()
+    
+    # Get player position and angle
+    px, py, pz = player_pos
+    
+    # Position bow in front of player
+    glTranslatef(px, py, pz + 80)
+    glRotatef(player_angle, 0, 0, 1)
+    glTranslatef(0, 60, 0)
+    
+    # Bow positioning
+    glTranslatef(15, -30, -10)
+    glRotatef(-15, 1, 0, 0)
+    glScalef(0.8, 0.8, 0.8)
+    glRotatef(180, 0, 0, 1)
+    
+    # Bow curve
+    glColor3f(0.8, 0.5, 0.2)  # Wood brown color
+    glLineWidth(4.0)
+    glBegin(GL_LINE_STRIP)
+    for i in range(-30, 31, 2):
+        angle = i * 3  # degrees
+        rad = radians(angle)
+        x = 0
+        y = i * 4  # vertical spacing
+        z = 20 * sin(rad)  # curve depth
+        glVertex3f(x, y, z)
+    glEnd()
+    
+    # Bow string
+    glColor3f(0.9, 0.9, 0.8)
+    glLineWidth(4.0)
+    glBegin(GL_LINES)
+    glVertex3f(0, -120, 20 * sin(radians(-90)))
+    glVertex3f(0, 120, 20 * sin(radians(90)))
+    glEnd()
+
+    if player_arrows > 0:
+        glPushMatrix()
+        glRotatef(70, 45, 0, 1) 
+        glTranslatef(-15, -30, 0)
+        
+        # Arrow shaft
+        glColor3f(0.6, 0.4, 0.2)
+        glLineWidth(5.0)
+        glBegin(GL_LINES)
+        glVertex3f(0, 0, 15)
+        glVertex3f(0, -80, 15)
+        glEnd()
+        
+        # Arrow fletching (feathers)
+        glColor3f(0.8, 0.8, 0.9)
+        glPointSize(3.0)
+        glBegin(GL_POINTS)
+        for offset in [-2, 0, 2]:
+            glVertex3f(offset, 10, 15)
+            glVertex3f(offset, 15, 15)
+        glEnd()
+        
+        # Arrow tip
+        glColor3f(0.7, 0.7, 0.7)
+        glLineWidth(5.0)
+        glBegin(GL_TRIANGLES)
+        glVertex3f(0, -80, 15)
+        glVertex3f(-2, -75, 15)
+        glVertex3f(2, -75, 15)
+        glEnd()
+        glPopMatrix()
+    glPopMatrix()
+
+def shoot_arrow():
+    """Shoot an arrow if player has arrows available"""
+    global player_arrows, player_arrows_fired
+    
+    if player_arrows <= 0:
+        print("No arrows left!")
+        return
+    
+    # Calculate shooting position (from bow)
+    px, py, pz = player_pos
+    shoot_pos = [px, py, pz + 80]
+    
+    # Calculate target position (far in front of player)
+    rad = radians(player_angle + 90)
+    target_distance = 2000  # How far the arrow will travel
+    target_pos = [
+        px + cos(rad) * target_distance,
+        py + sin(rad) * target_distance,
+        pz - 100  # Slight downward trajectory
+    ]
+    
+    # Create and fire arrow
+    arrow = PlayerArrow(shoot_pos, target_pos, damage=60)
+    player_arrows_fired.append(arrow)
+    player_arrows -= 1
+    
+    print(f"Arrow fired! Arrows remaining: {player_arrows}")
 
 # Drawing functions with manual shading (from paste.txt)
 def draw_cube_manual_shading(x, y, z, dx, dy, dz, base_color):
@@ -1484,7 +1730,7 @@ def restart_game():
     wall_hp = {}
     wall_max = {}
     all_walls = []
-
+    player_arrows_fired = []
     # Reset player stats
     player_coins = 0
     castle_health = 100
@@ -1605,7 +1851,13 @@ def show_screen():
         draw_hp_bar_for_castle(i)
     
     # Display UI
-  
+    # Draw player arrows
+    for arrow in player_arrows_fired:
+        arrow.draw()
+    
+    # Display bow
+    draw_light_bow()
+
     draw_text(10, 770, f"Coins: {player_coins}")
     draw_text(10, 740, f"Arrows: {player_arrows}")
     draw_text(10, 710, f"Castle Health: {castle_health}")
@@ -1653,7 +1905,8 @@ def handle_mouse_button(button, state, x, y):
     if button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN:
         fpp_mode = not fpp_mode
         print("FPP mode activated" if fpp_mode else "FPP mode deactivated")
-
+    elif button == GLUT_LEFT_BUTTON and state == GLUT_DOWN:
+        shoot_arrow()
 def handle_keyboard(key, x, y):
     global cam_dist, player_pos, player_angle, player_speed, player_turn_speed, player_coins, last_chest_time, player_arrows, camera_radius, min_radius, max_radius, pause, show_trails, wireframe, teleport_skip_clamp, surrender
     
