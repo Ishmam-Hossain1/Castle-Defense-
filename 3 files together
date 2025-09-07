@@ -6,6 +6,9 @@ import random
 import time
 import sys
 
+#surrender feature
+surrender = False
+
 # Global variables
 GRID_LENGTH = 500
 cam_angle_h = 45
@@ -1647,13 +1650,15 @@ update_camera_pos()
 
 
 def handle_mouse_button(button, state, x, y):
-    global fpp_mode
+    global fpp_mode,surrender
+    if surrender == True:
+        return
     if button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN:
         fpp_mode = not fpp_mode
         print("FPP mode activated" if fpp_mode else "FPP mode deactivated")
 
 def handle_keyboard(key, x, y):
-    global cam_dist, player_pos, player_angle, player_speed, player_turn_speed, player_coins, last_chest_time, player_arrows, camera_radius, min_radius, max_radius, pause, show_trails, wireframe, teleport_skip_clamp
+    global cam_dist, player_pos, player_angle, player_speed, player_turn_speed, player_coins, last_chest_time, player_arrows, camera_radius, min_radius, max_radius, pause, show_trails, wireframe, teleport_skip_clamp, surrender
     
     k = key.decode("utf-8").lower()
     zoom_step = 200
@@ -1665,6 +1670,13 @@ def handle_keyboard(key, x, y):
         camera_radius = min(max_radius, camera_radius + zoom_step)
     
     update_camera_pos()
+
+    if k == 'r':
+        surrender = False
+        restart_game()
+
+    if surrender == True:
+        return
     
     # Player rotation
     if k == 'a':
@@ -1672,8 +1684,10 @@ def handle_keyboard(key, x, y):
     elif k == 'd':
         player_angle -= player_turn_speed
 
-    elif k == 'r':
-        restart_game()
+
+
+    elif k == '0':
+        surrender = True
         
     
     # Move player forward/backward
